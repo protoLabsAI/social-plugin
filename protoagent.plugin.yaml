@@ -1,0 +1,46 @@
+id: social
+name: Social Studio
+version: 0.1.0
+description: >-
+  Organic social marketing for protoAgent — a brand kit that makes every draft sound like the
+  brand, the real limits and norms of nine platforms, a content queue you plan and draft into,
+  a linter that catches over-length posts / demoted links / banned words / machine-written
+  cadence, and a copy-ready export pack. Adds a writer + editor crew, five skills, and a board
+  view. Draft-only by design: it never posts anywhere, and it never invents a number.
+# Provenance (ADR 0027) — shown in the install review when added by git URL.
+repository: "https://github.com/protoLabsAI/social-plugin"
+guide_url: "https://github.com/protoLabsAI/social-plugin#quick-start"
+# The DS plugin-kit (/_ds/) + the sandboxed-iframe view convention need a recent host.
+min_protoagent_version: "0.34.0"
+
+# Declarative posture (ADR 0071). This plugin has NO network surface of its own: it holds no
+# platform credentials and makes no outbound calls. Research during drafting runs through the
+# agent's own web_search / fetch_url tools, under the agent's permissions, not this plugin's.
+capabilities:
+  network: []
+  filesystem: scoped        # the brand kit, the queue database, and exports, under the data dir
+enabled: false              # author default — operators opt in via plugins.enabled
+
+config_section: social
+config:
+  data_dir: ""              # brand kit + queue db + exports; blank = ~/.protoagent/social (per instance)
+  brand_kit_path: ""        # override just the brand-kit file; blank = <data_dir>/brand-kit.yaml
+  active_platforms: [x, linkedin, instagram, bluesky]
+settings:
+  - { key: data_dir, label: "Data directory", type: string, group: "Social Studio", description: "Where the brand kit, the content queue database, and exports live. Blank uses ~/.protoagent/social (with a per-instance subdirectory). Point it at a synced folder if you want the brand kit under version control." }
+  - { key: brand_kit_path, label: "Brand kit file", type: string, group: "Social Studio", description: "Override the path of the brand-kit YAML alone — useful when the kit lives in a repo but the queue should stay local. Blank uses brand-kit.yaml inside the data directory." }
+  - { key: active_platforms, label: "Active platforms", type: string_list, group: "Social Studio", description: "The surfaces this brand actually posts to — the agent plans calendars for these. Any of: x, linkedin, instagram, threads, bluesky, tiktok, youtube, facebook, reddit. Specs for the others stay available on request." }
+
+# Console rail view (ADR 0026) — the content queue as a board: ideas through posted,
+# with a copy button on every card so publishing by hand is one click per post.
+views:
+  - { id: social, label: "Social Studio", icon: "Megaphone", path: /plugins/social/view }
+
+public_paths:
+  - /plugins/social/view
+
+# Event bus (ADR 0039) — auto-namespaced social.*. Lights the rail icon when the
+# board changes or an export lands while the panel is closed.
+emits:
+  - queue_changed
+  - export_ready

@@ -1,0 +1,22 @@
+[project]
+name = "social"
+version = "0.1.0"            # keep in lockstep with protoagent.plugin.yaml and __init__.__version__
+requires-python = ">=3.11"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+extend-exclude = [".venv"]
+
+[tool.ruff.lint]
+# Mirrors protoAgent's own selection so local runs and CI agree, and so a ruff
+# upgrade widening the defaults can't fail this repo's CI on style nobody chose.
+select = ["E", "F", "W"]
+ignore = [
+  "E402",  # module-level import not at top — late/lazy imports are how host imports stay lazy here
+  "E501",  # line-too-long — long, readable comment lines are intentional
+]
