@@ -12,7 +12,7 @@ import logging
 
 log = logging.getLogger("protoagent.plugins.social")
 
-__version__ = "0.1.1"
+__version__ = "0.2.0"
 
 
 def register(registry) -> None:

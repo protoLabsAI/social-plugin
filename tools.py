@@ -65,12 +65,53 @@ def build_tools(registry):
     # ── the platforms ─────────────────────────────────────────────────────────
     @tool
     def social_platform_spec(platform: str = "") -> str:
-        """Look up what actually works on a platform: the character limit, where the '…more'
-        fold falls, the length band that performs, hashtag norms, whether links are demoted,
-        image dimensions, and the native shape of a post there. Call this before drafting for
-        a surface you haven't written for in this session. No argument returns a comparison
-        table of every platform."""
+        """Look up what a platform enforces and what currently works there: the character
+        limit, image dimensions, whether captions make links clickable — plus the researched
+        norms on file (length band, hashtag count, the '…more' fold, link demotion) and the
+        date they were last checked. Call this before drafting for a surface you haven't
+        written for in this session. No argument returns a table of every platform with how
+        fresh its norms are. If a platform has no norms, research them and record them with
+        social_record_norms rather than guessing."""
         return platforms.brief(platform)
+
+    @tool
+    def social_record_norms(platform: str, norms_yaml: str) -> str:
+        """Record what you researched about how a platform currently behaves — the length band
+        that performs, hashtag counts that read as native, where the '…more' fold falls,
+        whether links in the body are demoted and what to do instead, whether alt text is
+        expected, and what flops there. Nothing soft is built into this plugin, because
+        platform ranking drifts and a compiled-in number would state last year's folklore as
+        fact. Search first, then record what you found with the URLs you found it in.
+
+        `sources` is REQUIRED — a norm nobody can check is a guess. Send a small YAML document:
+
+            sources: ["https://...", "https://..."]
+            sweet_spot: [900, 1800]
+            hashtag_norm: [3, 5]
+            fold: 210
+            link_penalty: true
+            link_workaround: drop the link in the first comment and say so in the post
+            alt_text: recommended        # expected | recommended | n/a
+            hook: the first two lines are all that show before 'see more'
+            native_shape: short paragraphs with white space; a story or a number, then the lesson
+            flops: corporate announcement voice, buzzword stacks
+            notes: anything else a writer needs
+
+        Every key except `sources` is optional, and this merges into what's already on file,
+        so a run that only re-checked hashtags won't wipe the rest."""
+        from . import norms
+
+        try:
+            row = norms.record_yaml(platform, norms_yaml)
+        except Exception as e:  # noqa: BLE001 — validation errors are the useful output here
+            return f"Not recorded — {e}"
+        _emit("norms_recorded", {"platform": platforms.normalize(platform), "checked": row.get("checked")})
+        warnings = [w for w in norms.validate(row) if w.startswith("warn:")]
+        out = f"Recorded norms for {platforms.normalize(platform)} (checked {row.get('checked')}).\n\n"
+        out += norms.brief(platform)
+        if warnings:
+            out += "\n\nWorth filling in:\n" + "\n".join(f"- {w[5:].strip()}" for w in warnings)
+        return out
 
     @tool
     def social_check(
@@ -285,6 +326,7 @@ def build_tools(registry):
         social_brand_kit,
         social_save_brand_kit,
         social_platform_spec,
+        social_record_norms,
         social_check,
         social_queue_add,
         social_queue_list,

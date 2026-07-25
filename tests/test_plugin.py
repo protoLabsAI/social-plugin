@@ -60,11 +60,12 @@ def test_register_contributes_tools_and_both_routers(registry):
     social.register(registry)
 
     names = registry.tool_names()
-    assert len(names) == 9
+    assert len(names) == 10
     assert set(names) == {
         "social_brand_kit",
         "social_save_brand_kit",
         "social_platform_spec",
+        "social_record_norms",
         "social_check",
         "social_queue_add",
         "social_queue_list",
@@ -203,6 +204,7 @@ def test_the_expected_skills_ship():
     assert {p.parent.name for p in SKILL_FILES} == {
         "brand-kit-setup",
         "content-calendar",
+        "platform-norms",
         "draft-post",
         "repurpose",
         "engagement-prep",

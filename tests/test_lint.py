@@ -36,14 +36,14 @@ def test_empty_draft_is_an_error():
     assert "empty" in codes(lint.check("", "x"))
 
 
-def test_length_band_is_advisory_not_blocking():
+def test_length_band_is_advisory_not_blocking(seeded_norms):
     result = lint.check("Short.", "linkedin")
     assert "under_sweet_spot" in codes(result)
     assert levels(result, "under_sweet_spot") == ["info"]
     assert result["verdict"] != "blocked"
 
 
-def test_the_fold_is_reported_with_the_text_above_it():
+def test_the_fold_is_reported_with_the_text_above_it(seeded_norms):
     body = "The first line is the whole pitch. " + ("filler words here. " * 30)
     result = lint.check(body, "linkedin")
     fold = next(f for f in result["findings"] if f["code"] == "fold")
@@ -51,28 +51,28 @@ def test_the_fold_is_reported_with_the_text_above_it():
     assert result["hook"].startswith("The first line is the whole pitch.")
 
 
-def test_too_many_hashtags_warns_with_the_native_range():
+def test_too_many_hashtags_warns_with_the_native_range(seeded_norms):
     result = lint.check("Post " + " ".join(f"#tag{i}" for i in range(8)), "linkedin")
     assert "too_many_hashtags" in codes(result)
     assert levels(result, "too_many_hashtags") == ["warn"]
 
 
-def test_brand_kit_can_override_the_shipped_hashtag_norm():
+def test_brand_kit_house_rules_beat_researched_norms(seeded_norms):
     kit = {"platforms": {"linkedin": {"hashtag_norm": [0, 1]}}}
     result = lint.check("Post #one #two #three", "linkedin", kit=kit)
     assert "too_many_hashtags" in codes(result)
-    # The same draft is fine under the shipped 3-5 norm.
+    # The same draft is fine under the researched 3-5 norm.
     assert "too_many_hashtags" not in codes(lint.check("Post #one #two #three", "linkedin"))
 
 
-def test_link_in_body_warns_where_the_platform_demotes_it():
+def test_link_in_body_warns_where_the_platform_demotes_it(seeded_norms):
     result = lint.check("Read this https://example.com/post", "linkedin")
     assert "link_in_body" in codes(result)
     fix = next(f["fix"] for f in result["findings"] if f["code"] == "link_in_body")
     assert "comment" in fix.lower()
 
 
-def test_bare_domains_count_as_links():
+def test_bare_domains_count_as_links(seeded_norms):
     # Found by dogfooding: nobody types "https://" into a tweet, but a bare domain
     # is still a link and still gets the post demoted. Scoring these clean was the
     # linter passing exactly the posts it exists to catch.
@@ -95,7 +95,7 @@ def test_link_detection_does_not_fire_on_things_that_merely_contain_a_dot(text):
     assert lint.check(text, "linkedin")["links"] == 0
 
 
-def test_no_link_warning_where_links_are_fine():
+def test_no_link_warning_where_links_are_fine(seeded_norms):
     assert "link_in_body" not in codes(lint.check("Read this https://example.com", "bluesky"))
 
 
@@ -134,7 +134,7 @@ def test_emoji_policy_is_enforced_per_brand():
     assert "emoji" not in codes(lint.check("Shipping today 🚀", "x", kit={"voice": {"emoji": "sparing"}}))
 
 
-def test_missing_alt_text_is_an_error_where_the_culture_expects_it():
+def test_missing_alt_text_is_an_error_where_the_culture_expects_it(seeded_norms):
     on_bluesky = lint.check("A chart of our uptime.", "bluesky", has_media=True)
     assert levels(on_bluesky, "missing_alt_text") == ["error"]
 

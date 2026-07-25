@@ -43,6 +43,62 @@ def isolated_data_dir(tmp_path, monkeypatch):
 
 
 @pytest.fixture
+def seeded_norms():
+    """Researched norms on file for the platforms the tests exercise.
+
+    Nothing in the plugin ships these — the point of the norms layer is that they're
+    researched and dated, not compiled in — so any test asserting a norm-dependent
+    check has to put them there first, exactly as the agent would.
+    """
+    from social import norms
+
+    norms.record(
+        "x",
+        {
+            "sources": ["https://example.test/x"],
+            "sweet_spot": [70, 240],
+            "hashtag_norm": [0, 1],
+            "link_penalty": True,
+            "link_workaround": "put the link in a reply to your own post",
+            "alt_text": "recommended",
+        },
+    )
+    norms.record(
+        "linkedin",
+        {
+            "sources": ["https://example.test/li"],
+            "sweet_spot": [900, 1800],
+            "hashtag_norm": [3, 5],
+            "fold": 210,
+            "link_penalty": True,
+            "link_workaround": "drop the link in the first comment and say so in the post",
+            "alt_text": "recommended",
+        },
+    )
+    norms.record(
+        "bluesky",
+        {
+            "sources": ["https://example.test/bsky"],
+            "sweet_spot": [80, 260],
+            "hashtag_norm": [0, 2],
+            "link_penalty": False,
+            "alt_text": "expected",
+        },
+    )
+    norms.record(
+        "instagram",
+        {
+            "sources": ["https://example.test/ig"],
+            "sweet_spot": [140, 800],
+            "hashtag_norm": [3, 5],
+            "fold": 125,
+            "alt_text": "recommended",
+        },
+    )
+    return norms.load()
+
+
+@pytest.fixture
 def kit():
     """A small but complete brand kit, saved to the temp dir."""
     from social import brandkit

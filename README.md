@@ -13,12 +13,13 @@ produces the content; a person publishes it. That's a deliberate boundary — se
 | Piece | What it does |
 |---|---|
 | **Brand kit** | One YAML file — audiences, content pillars, voice, banned words, proof points, CTAs. Read before every draft, so posts sound like the brand instead of like marketing. |
-| **Platform specs** | The real limits and norms of nine surfaces: character caps, where the "…more" fold falls, hashtag counts that read as native, whether links get demoted, image dimensions, what reliably flops. |
+| **Platform limits** | What nine surfaces *enforce*: character caps, field caps, image dimensions, whether captions make links clickable. Compiled in, because the platform rejects the post otherwise. |
+| **Platform norms** | What currently *works* there — length band, hashtag counts, the "…more" fold, link demotion. Researched by the agent, stored with its sources and the date, editable by you. Never compiled in. |
 | **Content queue** | A board — idea → drafted → needs edit → approved → scheduled → posted — with pillar and campaign tagging, so the calendar stays balanced and nothing gets lost. |
 | **Linter** | Grades a draft 0–100 against the platform and the brand: over-length, hashtag spam, demoted links, missing alt text, banned phrases, and the cadence that makes copy read as machine-written. |
 | **Export** | A markdown pack with every approved post in its own copy block, in send order — or CSV for a scheduling tool. |
 | **Crew** | `social_writer` and `social_editor` subagents, so a batch of posts isn't nine variations of one sentence. |
-| **Skills** | `brand-kit-setup`, `content-calendar`, `draft-post`, `repurpose`, `engagement-prep`. |
+| **Skills** | `brand-kit-setup`, `platform-norms`, `content-calendar`, `draft-post`, `repurpose`, `engagement-prep`. |
 | **View** | A "Social Studio" rail panel: the queue as a board, with a copy button on every card. |
 
 Platforms carried: X, LinkedIn, Instagram, Threads, Bluesky, TikTok, YouTube, Facebook, Reddit.
@@ -40,6 +41,7 @@ That runs the `brand-kit-setup` interview. Twenty minutes of real answers, and e
 afterwards is downstream of them. Then:
 
 ```
+Research the norms for LinkedIn.  → dated, sourced norms on file for the linter to use
 Plan two weeks of content.        → a balanced calendar, seeded with concrete ideas
 Draft the Tuesday LinkedIn post.  → written native to the surface, linted, queued
 Export what I've approved.        → a copy-ready pack
@@ -84,7 +86,7 @@ proof:
 
 ctas: ["Try it free"]
 platforms:
-  linkedin: { hashtag_norm: [2, 3] }   # house rules override the shipped norms
+  linkedin: { hashtag_norm: [2, 3] }   # house rules beat researched norms
 ```
 
 Two things in here do real work beyond flavour:
@@ -93,6 +95,51 @@ Two things in here do real work beyond flavour:
   has to research and attribute, or ask you about. A social agent that invents a statistic
   costs more than one that posts nothing.
 - **`banned`** is enforced mechanically, not suggested. A draft containing one is `blocked`.
+
+## Platform norms
+
+Hard limits are compiled in — X caps at 280 characters, YouTube titles at 100 — because the
+platform enforces them and correcting one is a version bump, not a guess.
+
+**Everything soft is not.** How long a post should be, how many hashtags read as native,
+whether an external link costs you reach, where the "…more" fold falls: all of that drifts as
+the platforms retune their ranking. A constant compiled into a plugin would still be asserting
+2026's folklore in 2029, with the same confidence and none of the truth.
+
+So the agent researches it and writes down what it found, with sources and a date, next to your
+brand kit:
+
+```yaml
+# platform-norms.yaml — written by the agent, owned by you
+linkedin:
+  checked: 2026-07-24
+  sources: ["https://...", "https://..."]
+  sweet_spot: [900, 1800]
+  hashtag_norm: [3, 5]
+  fold: 210
+  link_penalty: true
+  link_workaround: drop the link in the first comment and say so in the post
+  alt_text: recommended
+  notes: the first-comment link trick still measurably beats an in-body link
+```
+
+`sources` is required — the write is refused without it, because a norm nobody can check is a
+guess wearing a number. Norms older than 180 days get flagged for re-checking.
+
+**With no norms on file, the linter says so and skips those checks.** It never fills the gap
+with a plausible threshold:
+
+```
+linkedin · 640 chars · score 100/100 · SHIP
+Clean — nothing to fix.
+
+· [no_norms] No norms on file for linkedin — checked hard limits and brand rules only.
+    → Research the current norms and record them with social_record_norms.
+```
+
+Say *"research the norms for LinkedIn"* to fill it in, or write the file yourself. Your brand
+kit's `platforms:` house rules beat researched norms either way — what you decided outranks
+what the agent read.
 
 ## The linter
 
@@ -129,7 +176,7 @@ for.
 
 ```bash
 python3.12 -m venv .venv && .venv/bin/pip install -r requirements-dev.txt ruff
-.venv/bin/python -m pytest -q      # 126 tests, no protoAgent host required
+.venv/bin/python -m pytest -q      # 163 tests, no protoAgent host required
 .venv/bin/ruff check . && .venv/bin/ruff format --check .
 ```
 

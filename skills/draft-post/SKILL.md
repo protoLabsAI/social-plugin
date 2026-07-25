@@ -14,10 +14,18 @@ tools: [social_brand_kit, social_platform_spec, social_check, social_queue_add, 
 
 1. `social_brand_kit()` — voice, banned words, proof points, CTAs. This overrides any house
    style you carry from pretraining.
-2. `social_platform_spec(platform)` — the limit, the fold, the hashtag norm, whether links are
-   demoted, the native shape.
+2. `social_platform_spec(platform)` — the hard character limit, plus whatever norms are on
+   file (the fold, the hashtag count, whether links are demoted) and **when they were last
+   checked**.
 
 Skipping either produces the same post everyone else's AI produces.
+
+If it reports *no norms on file*, or flags them as stale, run the `platform-norms` skill
+first — it's ten minutes of research and it's the difference between writing to how the
+platform works now and writing to how it worked whenever the model was trained. Nothing soft
+is compiled into this plugin, so an unresearched platform genuinely has no length band or
+hashtag guidance behind it, and the linter will tell you it skipped those checks rather than
+invent a threshold.
 
 ## The one rule about facts
 
@@ -33,9 +41,10 @@ turns one missing statistic into a wasted turn.
 
 ## Write
 
-**The hook is the post.** On X, the first five words decide the scroll. On LinkedIn and
-Instagram, everything above the '…more' fold is all most people ever see — `social_check`
-reports exactly where that line falls and what's above it.
+**The hook is the post.** The first few words decide the scroll, and on the surfaces that
+truncate, everything above the '…more' fold is all most people ever see. Where that line falls
+is a researched norm, not a constant — `social_check` reports its position and what's above it
+when the platform's norms are on file, and stays quiet about it when they aren't.
 
 Openers that work: a specific number, a concrete moment, a claim someone could disagree with,
 the thing that went wrong. Openers that don't: "In today's...", a rhetorical question, "Excited
@@ -47,14 +56,17 @@ from a template.
 
 **One idea per post.** Two good ideas are two posts.
 
-**Write native, don't translate.** The same idea becomes a different artifact per surface:
+**Write native, don't translate.** The same idea becomes a different artifact per surface.
+What follows is craft — the character of each place — not thresholds. Anything numeric (how
+long, how many hashtags, where the fold sits, whether a link costs you reach) comes from the
+platform's researched norms, because those move and this doesn't:
 
 - **X** — one sharp claim, or a thread where post 1 stands alone and each post earns the next.
-  Line breaks, no preamble, link in a reply.
+  Line breaks, no preamble.
 - **LinkedIn** — a concrete story or a number, then what it means. Short paragraphs with white
-  space. Ends on a question or invitation, never a hard sell. Link in the first comment.
-- **Instagram** — the visual carries the idea; the caption adds what the image can't hold. First
-  125 characters do the work. Always write alt text.
+  space. Ends on a question or invitation, never a hard sell.
+- **Instagram** — the visual carries the idea; the caption adds what the image can't hold.
+  Always write alt text.
 - **Threads / Bluesky** — conversational and short. These audiences smell scheduled corporate
   copy instantly; write like a person talking.
 - **TikTok / YouTube** — the script and the title/thumbnail are the deliverable, not the caption.
