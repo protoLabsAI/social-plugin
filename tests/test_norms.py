@@ -183,3 +183,30 @@ def test_effective_norms_merges_the_two_layers(seeded_norms):
     merged = lint.effective_norms("linkedin", {"platforms": {"linkedin": {"hashtag_norm": [0, 1]}}})
     assert merged["hashtag_norm"] == [0, 1]  # house rule
     assert merged["sweet_spot"] == [900, 1800]  # researched, untouched
+
+
+def test_coverage_is_reported_precisely_rather_than_left_to_inference():
+    # Asked "what couldn't you check?", an agent will otherwise guess — and guess
+    # wrong about which rules are brand rules (always run) and which needed a norm.
+    result = lint.check("A post.", "linkedin")
+    msg = next(f["message"] for f in result["findings"] if f["code"] == "no_norms")
+    for label in ("the length band", "where the fold falls", "hashtag count", "link demotion"):
+        assert label in msg
+
+
+def test_partial_norms_name_only_the_fields_still_missing():
+    norms.record("x", {"sources": ["u"], "hashtag_norm": [0, 1], "sweet_spot": [70, 240], "link_penalty": False})
+    result = lint.check("A post about deploys that runs a little longer than the band.", "x")
+    assert "no_norms" not in codes(result)
+    msg = next(f["message"] for f in result["findings"] if f["code"] == "partial_norms")
+    assert "where the fold falls" in msg
+    assert "hashtag count" not in msg, "a field that IS on file must not be reported as missing"
+
+
+def test_stale_and_incomplete_are_reported_independently(seeded_norms):
+    # Norms can be complete and too old, or fresh and partial. One must not mask the other.
+    old = (norms.today() - timedelta(days=norms.STALE_AFTER_DAYS + 1)).isoformat()
+    norms.record("x", {"sources": ["u"]}, checked=old)
+    result = lint.check("Deploys dropped to 40 seconds after the rewrite. What's your slowest step?", "x")
+    assert {"stale_norms", "partial_norms"} <= codes(result)
+    assert result["score"] == 100, "neither coverage finding may cost the draft points"

@@ -29,7 +29,17 @@ _WEIGHTS = {"error": 25, "warn": 8, "info": 2}
 # Findings that report on the linter's own coverage rather than on the draft. They
 # belong in the output — a reader has to know what wasn't checked — but they are not
 # defects in the copy, so they must not cost the post points.
-_UNSCORED_CODES = {"no_norms", "stale_norms"}
+_UNSCORED_CODES = {"no_norms", "partial_norms", "stale_norms"}
+
+# The checks that need a researched norm, and the norms key each one needs. Used to
+# report coverage precisely instead of leaving the reader to work it out.
+_NORM_DEPENDENT = (
+    ("sweet_spot", "the length band"),
+    ("fold", "where the fold falls"),
+    ("hashtag_norm", "hashtag count"),
+    ("link_penalty", "link demotion"),
+    ("alt_text", "how strictly alt text is expected"),
+)
 
 # Links, as they're actually written in social copy. Scheme-prefixed URLs are the
 # easy case; the one that matters is the BARE domain — nobody types "https://" into a
@@ -212,14 +222,28 @@ def check(
         )
 
     # ── coverage: say what isn't being checked, and don't charge for it ───────
+    # Name the skipped checks rather than leaving a reader to infer them — an agent
+    # asked "what couldn't you check?" will otherwise guess, and guess wrong about
+    # which rules were brand rules (always run) and which needed a norm.
+    skipped = [label for key, label in _NORM_DEPENDENT if not norm.get(key)]
     if not norm:
         add(
             "info",
             "no_norms",
-            f"No norms on file for {spec.id} — checked hard limits and brand rules only.",
+            f"No norms on file for {spec.id} — checked hard limits and brand rules only. "
+            f"Not checked: {', '.join(labels for _, labels in _NORM_DEPENDENT)}.",
             "Research the current norms and record them with social_record_norms.",
         )
-    elif norms.is_stale(spec.id) and not brandkit.platform_overrides(kit, spec.id):
+    elif skipped:
+        add(
+            "info",
+            "partial_norms",
+            f"Norms on file for {spec.id} don't cover: {', '.join(skipped)}.",
+            "Record those fields with social_record_norms if the research settles them.",
+        )
+
+    # Independent of coverage: norms can be complete and still too old to trust.
+    if norm and norms.is_stale(spec.id) and not brandkit.platform_overrides(kit, spec.id):
         add(
             "info",
             "stale_norms",
