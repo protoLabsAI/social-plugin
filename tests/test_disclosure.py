@@ -144,3 +144,23 @@ def test_accessibility_findings_are_advisory_not_blocking():
     result = lint.check("Shipping #buildinpublicdaily", "x", has_media=True, alt_text="Image of a chart.")
     assert result["verdict"] != "blocked"
     assert levels(result, "hashtag_case") == ["info"]
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Full disclosure: Acme is paying us for this one. The appliance is genuinely good.",
+        "Disclosure: Acme sent this over. Here's what it does.",
+        "Acme is paying us to write this, so weigh it accordingly.",
+        "They gave us the hardware for free. Here's what broke anyway.",
+        "We were compensated for this post.",
+        "Acme sent this in exchange for an honest write-up.",
+    ],
+)
+def test_plain_english_disclosures_count(text):
+    # Found by dogfooding: the agent wrote "Full disclosure: ..." — clearer than "#ad"
+    # and closer to what the Guides prefer — and the detector rejected it, pushing it
+    # toward the weaker hashtag form. A detector that only accepts hashtags argues
+    # against the skill's own advice.
+    result = lint.check(text, "x", material_connection="sponsored")
+    assert "missing_disclosure" not in codes(result), text

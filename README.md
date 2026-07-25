@@ -231,7 +231,7 @@ for.
 
 ```bash
 python3.12 -m venv .venv && .venv/bin/pip install -r requirements-dev.txt ruff
-.venv/bin/python -m pytest -q      # 239 tests, no protoAgent host required
+.venv/bin/python -m pytest -q      # 245 tests, no protoAgent host required
 .venv/bin/ruff check . && .venv/bin/ruff format --check .
 ```
 

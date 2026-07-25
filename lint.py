@@ -83,6 +83,24 @@ DISCLOSURE_TOKENS = (
     "i work at",
     "my employer",
     "#employee",
+    # Plain-English disclosures. The Guides prefer wording a reader decodes without
+    # decoding anything, so a detector that only accepted hashtags would push writers
+    # toward the weaker form — which is exactly backwards.
+    "full disclosure",
+    "disclosure:",
+    "paying us",
+    "paying me",
+    "paid us",
+    "paid me",
+    "we were paid",
+    "i was paid",
+    "compensated",
+    "in exchange for",
+    "gave us",
+    "gave me",
+    "for free",
+    "free sample",
+    "at no cost",
 )
 
 # Wording the FTC has specifically called inadequate: abbreviations and warm words
