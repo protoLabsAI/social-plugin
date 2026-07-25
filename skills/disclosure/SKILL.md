@@ -45,6 +45,11 @@ social_queue_update(post_id=12, material_connection="sponsored")
 
 A post with a connection recorded and no disclosure in the copy is **blocked**, not warned.
 
+When a draft comes back blocked, **fix the row you already queued** —
+`social_queue_update(post_id=N, body=...)` then re-check. Do not queue a second attempt: the
+queue guards against near-duplicates and will refuse, and each extra row is one more thing the
+operator has to read past.
+
 ## Where it has to sit
 
 The FTC doesn't dictate placement, but it's explicit about what fails:

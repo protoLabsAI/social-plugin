@@ -299,6 +299,35 @@ def list_posts(
     return [_row(r) for r in rows]
 
 
+def _normalise(text: str) -> str:
+    return " ".join((text or "").lower().split())
+
+
+def find_similar(platform: str, body: str, *, threshold: float = 0.85) -> dict[str, Any] | None:
+    """An existing open post on the same platform that says nearly the same thing.
+
+    Guards the lint-and-fix loop. A writer whose draft comes back ``blocked`` has two
+    options — edit the row, or write a new one — and the second is a strong instinct.
+    Left unguarded, one post that fails the linter three times becomes four rows in
+    the queue and the operator reviews the same copy four times.
+    """
+    text = _normalise(body)
+    if len(text) < 40:  # too short to judge; ideas legitimately repeat
+        return None
+    from difflib import SequenceMatcher
+
+    for row in list_posts(status="open", platform=platform, limit=200):
+        other = _normalise(row.get("body", ""))
+        if not other:
+            continue
+        # Cheap length gate before the O(n²) comparison.
+        if not (0.7 <= len(other) / len(text) <= 1.4):
+            continue
+        if SequenceMatcher(None, text, other).ratio() >= threshold:
+            return row
+    return None
+
+
 def counts() -> dict[str, int]:
     """How many posts sit in each status — the board header."""
     with connect() as conn:

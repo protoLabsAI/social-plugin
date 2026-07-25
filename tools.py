@@ -163,6 +163,11 @@ def build_tools(registry):
         if post_id:
             store.update(int(post_id), score=result["score"])
             out += f"\n\n(Recorded score {result['score']} on post {post_id}.)"
+            if result["verdict"] != "ship":
+                out += (
+                    f"\nFix it in place: social_queue_update(post_id={post_id}, body=...) "
+                    "then re-check. Don't queue another draft."
+                )
         if kit is None and brandkit.exists() is False:
             out += "\n\nNote: no brand kit yet, so voice rules weren't checked."
         return out
@@ -182,6 +187,7 @@ def build_tools(registry):
         source: str = "",
         notes: str = "",
         material_connection: str = "",
+        allow_duplicate: bool = False,
     ) -> str:
         """Put a post in the queue. Use status 'idea' when planning a calendar and 'drafted'
         once the copy exists. scheduled_for is an ISO date or datetime (2026-08-03 or
@@ -189,9 +195,19 @@ def build_tools(registry):
         source records where a repurposed piece came from. Set material_connection whenever
         anything of value sits behind the post ('sponsored', 'gifted', 'affiliate', 'employee',
         'partner', 'own_product') so the disclosure rules get checked. Returns the new post's id."""
+        canonical = platforms.normalize(platform)
+        if body and not allow_duplicate:
+            twin = store.find_similar(canonical, body)
+            if twin:
+                return (
+                    f"Not queued — #{twin['id']} ({twin['status']}) already says nearly the same thing.\n"
+                    f"Update that one instead: social_queue_update(post_id={twin['id']}, body=...). "
+                    "Re-queueing a failed draft leaves the operator reviewing the same copy twice. "
+                    "Pass allow_duplicate=true if you really do want both."
+                )
         try:
             row = store.add(
-                platform=platforms.normalize(platform),
+                platform=canonical,
                 body=body,
                 status=status,
                 pillar=pillar,

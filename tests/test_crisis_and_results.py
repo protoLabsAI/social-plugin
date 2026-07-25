@@ -233,3 +233,63 @@ def test_an_existing_database_gains_the_new_columns_without_losing_rows(isolated
     assert rows[0]["results"] == {}
 
     assert store.update(rows[0]["id"], material_connection="gifted")["material_connection"] == "gifted"
+
+
+# ── the duplicate guard ───────────────────────────────────────────────────────
+# Found by dogfooding: a draft that failed the disclosure check was re-queued 13
+# times, because "write another one" is a stronger instinct than "edit that one".
+BODY = (
+    "We got handed an Acme deployment appliance last week and ran our whole pipeline "
+    "through it. Here is what actually happened, including the part that broke."
+)
+
+
+def test_a_near_identical_draft_is_refused_and_points_at_the_original(tools):
+    first = tool_call(tools, "social_queue_add", platform="linkedin", body=BODY)
+    assert "Queued #1" in first
+
+    again = tool_call(tools, "social_queue_add", platform="linkedin", body=BODY + " Slightly edited.")
+    assert "Not queued" in again
+    assert "#1" in again
+    assert "social_queue_update(post_id=1" in again
+    assert len(store.list_posts()) == 1
+
+
+def test_the_guard_can_be_overridden_deliberately(tools):
+    tool_call(tools, "social_queue_add", platform="linkedin", body=BODY)
+    out = tool_call(tools, "social_queue_add", platform="linkedin", body=BODY, allow_duplicate=True)
+    assert "Queued #2" in out
+
+
+def test_genuinely_different_copy_is_not_blocked(tools):
+    tool_call(tools, "social_queue_add", platform="linkedin", body=BODY)
+    out = tool_call(
+        tools,
+        "social_queue_add",
+        platform="linkedin",
+        body="Three things we learned rewriting the scheduler, and the one that cost us a weekend.",
+    )
+    assert "Queued #2" in out
+
+
+def test_the_same_copy_on_a_different_platform_is_fine(tools):
+    tool_call(tools, "social_queue_add", platform="linkedin", body=BODY)
+    assert "Queued #2" in tool_call(tools, "social_queue_add", platform="x", body=BODY)
+
+
+def test_a_published_post_does_not_block_a_fresh_one(tools):
+    row = store.add(platform="linkedin", body=BODY, status="posted")
+    assert row["id"] == 1
+    assert "Queued #2" in tool_call(tools, "social_queue_add", platform="linkedin", body=BODY)
+
+
+def test_short_ideas_may_legitimately_repeat(tools):
+    tool_call(tools, "social_queue_add", platform="x", body="Ship it.")
+    assert "Queued #2" in tool_call(tools, "social_queue_add", platform="x", body="Ship it.")
+
+
+def test_a_failing_lint_tells_the_writer_to_fix_in_place(tools):
+    row = store.add(platform="x", body="a" * 400)
+    out = tool_call(tools, "social_check", post_id=row["id"])
+    assert f"social_queue_update(post_id={row['id']}" in out
+    assert "Don't queue another draft." in out
