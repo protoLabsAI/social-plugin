@@ -110,8 +110,11 @@ def save_yaml(text: str) -> Path:
 def validate(data: dict[str, Any]) -> list[str]:
     """Schema check. 'error:' entries block a save; 'warn:' entries are gaps worth filling."""
     out: list[str] = []
-    if not str(data.get("brand", "")).strip():
+    raw_brand = data.get("brand")
+    if not brand_name(data):
         out.append("error: `brand` (the name) is required")
+    elif isinstance(raw_brand, dict):
+        out.append("warn: `brand` is a mapping; a plain string reads better everywhere it's displayed")
 
     for key in ("audiences", "pillars"):
         val = data.get(key)
@@ -171,6 +174,23 @@ def avoid_phrases(data: dict[str, Any] | None) -> list[str]:
 def emoji_policy(data: dict[str, Any] | None) -> str:
     policy = str(_voice(data).get("emoji", "sparing")).strip().lower()
     return policy if policy in EMOJI_POLICIES else "sparing"
+
+
+def brand_name(data: dict[str, Any] | None) -> str:
+    """The brand's display name, whatever shape the kit put it in.
+
+    ``brand:`` is documented as a scalar, but an agent writing the kit from an
+    interview will sometimes nest it (``brand: {name: ..., product: ...}``) — which
+    validates fine and then renders as "[object Object]" in the console header. Accept
+    both rather than rejecting a kit that is otherwise correct and already in use.
+    """
+    raw = (data or {}).get("brand")
+    if isinstance(raw, dict):
+        for key in ("name", "brand", "title", "product"):
+            if str(raw.get(key, "")).strip():
+                return str(raw[key]).strip()
+        return ""
+    return str(raw or "").strip()
 
 
 def disclosure(data: dict[str, Any] | None) -> dict[str, Any]:
@@ -247,7 +267,7 @@ def brief(data: dict[str, Any] | None = None, section: str = "") -> str:
     section = (section or "").strip().lower()
     blocks: dict[str, str] = {}
 
-    head = [f"# Brand kit — {data.get('brand', 'unnamed')}"]
+    head = [f"# Brand kit — {brand_name(data) or 'unnamed'}"]
     if data.get("positioning"):
         head.append(f"\n{data['positioning']}")
     if data.get("website"):

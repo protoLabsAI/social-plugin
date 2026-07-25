@@ -115,3 +115,30 @@ def test_brief_section_narrows_and_reports_unknown_sections(kit):
     assert "Audiences" not in voice
     assert brandkit.brief(section="audience").startswith("## Audiences"), "aliases should resolve"
     assert "No `nonsense` section" in brandkit.brief(section="nonsense")
+
+
+def test_brand_name_resolves_from_either_shape():
+    # Found at wind-down on the live agent: it wrote `brand:` as a mapping from its
+    # own interview, which validated fine and rendered as "[object Object]" in the
+    # console header. Accept both rather than rejecting a kit already in use.
+    assert brandkit.brand_name({"brand": "Testco"}) == "Testco"
+    assert brandkit.brand_name({"brand": {"name": "Testco", "product": "protoAgent"}}) == "Testco"
+    assert brandkit.brand_name({"brand": {"product": "protoAgent"}}) == "protoAgent"
+    assert brandkit.brand_name({"brand": {}}) == ""
+    assert brandkit.brand_name(None) == ""
+
+
+def test_a_nested_brand_is_loadable_but_flagged():
+    problems = brandkit.validate({"brand": {"name": "Testco"}, "voice": {}})
+    assert not [p for p in problems if p.startswith("error:")]
+    assert any("`brand` is a mapping" in p for p in problems)
+
+
+def test_an_empty_nested_brand_still_fails_the_required_check():
+    # A dict stringifies truthy, so the naive check would have passed this.
+    assert any("`brand` (the name) is required" in p for p in brandkit.validate({"brand": {}}))
+
+
+def test_the_brief_header_uses_the_resolved_name():
+    brandkit.save({"brand": {"name": "Testco", "product": "protoAgent"}})
+    assert "# Brand kit — Testco" in brandkit.brief()

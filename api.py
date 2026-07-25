@@ -40,7 +40,7 @@ def build_data_router():
     async def _queue() -> JSONResponse:
         brand = ""
         try:
-            brand = (brandkit.load() or {}).get("brand", "")
+            brand = brandkit.brand_name(brandkit.load())
         except Exception:  # noqa: BLE001 — a broken kit shouldn't blank the board
             brand = ""
         return JSONResponse(

@@ -250,3 +250,10 @@ def test_the_board_renders_a_hold_banner():
     assert 'id="hold"' in view.PAGE
     assert "Queue held" in view.PAGE
     assert "esc(data.hold.reason)" in view.PAGE, "the reason is operator text and must be escaped"
+
+
+def test_the_board_never_hands_the_view_a_non_string_brand(client):
+    from social import brandkit
+
+    brandkit.save({"brand": {"name": "Testco", "product": "protoAgent"}})
+    assert client.get("/api/plugins/social/queue").json()["brand"] == "Testco"
