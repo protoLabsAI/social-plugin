@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import pytest
 from social import brandkit, lint
 
 
@@ -69,6 +70,29 @@ def test_link_in_body_warns_where_the_platform_demotes_it():
     assert "link_in_body" in codes(result)
     fix = next(f["fix"] for f in result["findings"] if f["code"] == "link_in_body")
     assert "comment" in fix.lower()
+
+
+def test_bare_domains_count_as_links():
+    # Found by dogfooding: nobody types "https://" into a tweet, but a bare domain
+    # is still a link and still gets the post demoted. Scoring these clean was the
+    # linter passing exactly the posts it exists to catch.
+    result = lint.check("Star it if it's useful: github.com/protoLabsAI/protoAgent", "x")
+    assert result["links"] == 1
+    assert "link_in_body" in codes(result)
+    assert "link_in_body" in codes(lint.check("Visit www.example.com today", "linkedin"))
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "We shipped v0.114.0 today. It works.",  # a version, not a domain
+        "The report.pdf is attached. Done.",  # a filename
+        "Deploys dropped to 40s. Nothing else changed.",  # a number then a sentence
+        "Ends here.Next sentence starts",  # a missing space after a full stop
+    ],
+)
+def test_link_detection_does_not_fire_on_things_that_merely_contain_a_dot(text):
+    assert lint.check(text, "linkedin")["links"] == 0
 
 
 def test_no_link_warning_where_links_are_fine():

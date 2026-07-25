@@ -20,7 +20,22 @@ from . import brandkit, platforms
 # Weight per severity, subtracted from 100.
 _WEIGHTS = {"error": 25, "warn": 8, "info": 2}
 
-_URL_RE = re.compile(r"https?://\S+", re.IGNORECASE)
+# Links, as they're actually written in social copy. Scheme-prefixed URLs are the
+# easy case; the one that matters is the BARE domain — nobody types "https://" into a
+# tweet, but "github.com/you/repo" is still a link and still gets the post demoted.
+# Bare domains are matched against a TLD list rather than `\w+\.\w+` so that version
+# numbers ("v0.114.0"), file names ("report.pdf"), and sentences with no space after
+# the full stop don't read as links.
+_LINK_TLDS = (
+    "com|org|net|edu|gov|io|dev|ai|co|app|sh|gg|xyz|me|so|to|tv|fm|us|uk|ca|de|fr|eu|"
+    "info|biz|studio|tech|design|blog|news|cloud|page|link|site|online|store|shop"
+)
+_URL_RE = re.compile(
+    r"(?:https?://\S+)"  # explicit scheme
+    r"|(?:\bwww\.\S+)"  # www., scheme omitted
+    rf"|(?:\b(?!\d+\.)[a-z0-9][a-z0-9-]*(?:\.[a-z0-9-]+)*\.(?:{_LINK_TLDS})\b(?:/\S*)?)",
+    re.IGNORECASE,
+)
 _HASHTAG_RE = re.compile(r"(?<!\w)#(\w+)")
 _MENTION_RE = re.compile(r"(?<!\w)@(\w+)")
 _CAPS_RUN_RE = re.compile(r"\b[A-Z]{2,}(?:\s+[A-Z]{2,}){2,}\b")
