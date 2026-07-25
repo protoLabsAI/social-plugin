@@ -54,7 +54,28 @@ CREATE TABLE IF NOT EXISTS posts (
 );
 CREATE INDEX IF NOT EXISTS idx_posts_status ON posts(status);
 CREATE INDEX IF NOT EXISTS idx_posts_sched  ON posts(scheduled_for);
+
+CREATE TABLE IF NOT EXISTS meta (
+    key   TEXT PRIMARY KEY,
+    value TEXT NOT NULL DEFAULT ''
+);
 """
+
+# Columns added after the first release. Applied to existing databases on connect —
+# an operator who has been queueing posts for weeks must not lose them to an upgrade.
+_ADDED_COLUMNS = {
+    # The material connection that triggers an FTC disclosure requirement, if any.
+    "material_connection": "TEXT NOT NULL DEFAULT ''",
+    # Results pasted back after publishing, as JSON. The only way a draft-only agent
+    # ever learns whether any of this worked.
+    "results": "TEXT NOT NULL DEFAULT '{}'",
+    "posted_at": "TEXT NOT NULL DEFAULT ''",
+}
+
+# Relationships that require a disclosure in the post itself (FTC Endorsement Guides).
+# "none" is explicit rather than blank so an operator can record that they considered
+# it and there is no connection.
+MATERIAL_CONNECTIONS = ("", "none", "sponsored", "gifted", "affiliate", "employee", "partner", "own_product")
 
 
 def db_path() -> Path:
@@ -70,16 +91,68 @@ def connect() -> sqlite3.Connection:
     conn = sqlite3.connect(db_path())
     conn.row_factory = sqlite3.Row
     conn.executescript(_SCHEMA)
+    _migrate(conn)
     return conn
+
+
+def _migrate(conn: sqlite3.Connection) -> None:
+    """Add columns introduced after a database was created.
+
+    SQLite has no ``ADD COLUMN IF NOT EXISTS``, so compare against the live table.
+    Cheap enough to run per connect, and it means an upgrade never asks the operator
+    to choose between the new features and the queue they've already built.
+    """
+    have = {r["name"] for r in conn.execute("PRAGMA table_info(posts)")}
+    for name, decl in _ADDED_COLUMNS.items():
+        if name not in have:
+            conn.execute(f"ALTER TABLE posts ADD COLUMN {name} {decl}")
 
 
 def _row(r: sqlite3.Row) -> dict[str, Any]:
     d = dict(r)
-    try:
-        d["assets"] = json.loads(d.get("assets") or "[]")
-    except json.JSONDecodeError:
-        d["assets"] = []
+    for key, default in (("assets", []), ("results", {})):
+        try:
+            d[key] = json.loads(d.get(key) or json.dumps(default))
+        except json.JSONDecodeError:
+            d[key] = default
     return d
+
+
+# ── the queue hold (crisis stop) ─────────────────────────────────────────────
+def hold(reason: str) -> dict[str, str]:
+    """Stop the queue. Nothing scheduled should leave while this is set.
+
+    The first move in a social crisis is to pause pre-scheduled content, because the
+    damage isn't the crisis — it's the cheerful product post that goes out during it.
+    This plugin doesn't publish, so the hold works on the thing it does own: the
+    export pack refuses to build, and the calendar leads with the hold.
+    """
+    if not (reason or "").strip():
+        raise ValueError("a hold needs a reason — whoever reads this later will need to know why")
+    at = _now()
+    with connect() as conn:
+        conn.executemany(
+            "INSERT INTO meta (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+            [("hold_reason", reason.strip()), ("hold_since", at)],
+        )
+    return {"reason": reason.strip(), "since": at}
+
+
+def release() -> bool:
+    """Lift the hold. Returns False if there wasn't one."""
+    held = hold_state() is not None
+    with connect() as conn:
+        conn.execute("DELETE FROM meta WHERE key IN ('hold_reason', 'hold_since')")
+    return held
+
+
+def hold_state() -> dict[str, str] | None:
+    """The active hold, or None."""
+    with connect() as conn:
+        rows = {r["key"]: r["value"] for r in conn.execute("SELECT key, value FROM meta")}
+    if not rows.get("hold_reason"):
+        return None
+    return {"reason": rows["hold_reason"], "since": rows.get("hold_since", "")}
 
 
 def add(
@@ -97,15 +170,17 @@ def add(
     source: str = "",
     notes: str = "",
     score: int = 0,
+    material_connection: str = "",
 ) -> dict[str, Any]:
     """Insert one post. Returns the stored row."""
     status = _valid_status(status)
+    material_connection = _valid_connection(material_connection)
     now = _now()
     with connect() as conn:
         cur = conn.execute(
             "INSERT INTO posts (created, updated, platform, status, pillar, campaign, scheduled_for,"
-            " title, body, hashtags, alt_text, assets, source, notes, score)"
-            " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            " title, body, hashtags, alt_text, assets, source, notes, score, material_connection)"
+            " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
             (
                 now,
                 now,
@@ -122,6 +197,7 @@ def add(
                 source,
                 notes,
                 int(score),
+                material_connection,
             ),
         )
         new_id = cur.lastrowid
@@ -150,6 +226,9 @@ def update(post_id: int, **fields: Any) -> dict[str, Any] | None:
         "source",
         "notes",
         "score",
+        "material_connection",
+        "results",
+        "posted_at",
     }
     sets, vals = [], []
     for key, val in fields.items():
@@ -157,8 +236,12 @@ def update(post_id: int, **fields: Any) -> dict[str, Any] | None:
             continue
         if key == "status":
             val = _valid_status(str(val))
+        if key == "material_connection":
+            val = _valid_connection(str(val))
         if key == "assets":
             val = json.dumps(val if isinstance(val, list) else [val])
+        if key == "results":
+            val = json.dumps(val if isinstance(val, dict) else {})
         if key == "score":
             val = int(val)
         sets.append(f"{key} = ?")
@@ -266,8 +349,42 @@ def pillar_balance(*, status: str = "", days: int = 0) -> dict[str, int]:
     return {r["pillar"]: r["n"] for r in rows}
 
 
+def record_results(post_id: int, results: dict[str, Any], *, posted_at: str = "") -> dict[str, Any] | None:
+    """Attach real-world numbers to a published post, and mark it posted.
+
+    Merges into whatever is already recorded, so adding week-two numbers doesn't
+    discard week-one's. Non-numeric values are kept as-is — "what the operator
+    noticed" is data too, and often better data than impressions.
+    """
+    row = get(post_id)
+    if not row:
+        return None
+    merged = {**(row.get("results") or {}), **{k: v for k, v in (results or {}).items() if v not in (None, "")}}
+    fields: dict[str, Any] = {"results": merged}
+    if row["status"] != "posted":
+        fields["status"] = "posted"
+    if posted_at or not row.get("posted_at"):
+        fields["posted_at"] = posted_at or _now()
+    return update(post_id, **fields)
+
+
+def with_results(*, platform: str = "", pillar: str = "", limit: int = 500) -> list[dict[str, Any]]:
+    """Posted rows that actually carry numbers — the only ones worth analysing."""
+    rows = [r for r in list_posts(status="posted", platform=platform, pillar=pillar, limit=limit) if r.get("results")]
+    return rows
+
+
 def _valid_status(status: str) -> str:
     s = (status or "").strip().lower()
     if s not in STATUSES:
         raise ValueError(f"unknown status {status!r} — use one of: {', '.join(STATUSES)}")
     return s
+
+
+def _valid_connection(value: str) -> str:
+    v = (value or "").strip().lower()
+    if v not in MATERIAL_CONNECTIONS:
+        raise ValueError(
+            f"unknown material connection {value!r} — use one of: {', '.join(c for c in MATERIAL_CONNECTIONS if c)}"
+        )
+    return v

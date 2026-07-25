@@ -1,13 +1,16 @@
 id: social
 name: Social Studio
-version: 0.2.1
+version: 0.3.0
 description: >-
   Organic social marketing for protoAgent — a brand kit that makes every draft sound like the
   brand, the hard limits of nine platforms plus researched-and-dated norms for how they
   currently behave, a content queue you plan and draft into, a linter that catches over-length
   posts / demoted links / banned words / machine-written cadence, and a copy-ready export pack.
-  Adds a writer + editor crew, six skills, and a board view. Draft-only by design: it never
-  posts anywhere, it never invents a number, and it never asserts a platform norm it can't date.
+  Checks FTC disclosure on anything with a sponsorship, gift, affiliate link, or employment
+  behind it, holds the whole queue when a crisis makes scheduled content a liability, and reads
+  back what actually performed. Adds a writer + editor + researcher crew, nine skills, and a
+  board view. Draft-only by design: it never posts anywhere, it never invents a number, and it
+  never asserts a platform norm it can't date.
 # Provenance (ADR 0027) — shown in the install review when added by git URL.
 repository: "https://github.com/protoLabsAI/social-plugin"
 guide_url: "https://github.com/protoLabsAI/social-plugin#quick-start"
@@ -46,3 +49,6 @@ emits:
   - queue_changed
   - export_ready
   - norms_recorded
+  - queue_held
+  - queue_released
+  - results_recorded

@@ -60,12 +60,16 @@ def test_register_contributes_tools_and_both_routers(registry):
     social.register(registry)
 
     names = registry.tool_names()
-    assert len(names) == 10
+    assert len(names) == 14
     assert set(names) == {
         "social_brand_kit",
         "social_save_brand_kit",
         "social_platform_spec",
         "social_record_norms",
+        "social_hold_queue",
+        "social_release_queue",
+        "social_record_results",
+        "social_performance",
         "social_check",
         "social_queue_add",
         "social_queue_list",
@@ -145,7 +149,7 @@ def test_queue_route_returns_the_board_shape(client):
 
     store.add(platform="x", body="Hello.", pillar="Build in public")
     data = client.get("/api/plugins/social/queue").json()
-    assert set(data) == {"counts", "posts", "pillars", "brand"}
+    assert set(data) == {"counts", "posts", "pillars", "brand", "hold"}
     assert data["posts"][0]["body"] == "Hello."
     assert data["pillars"]["Build in public"] == 1
 
@@ -204,6 +208,9 @@ def test_the_expected_skills_ship():
     assert {p.parent.name for p in SKILL_FILES} == {
         "brand-kit-setup",
         "content-calendar",
+        "crisis-response",
+        "disclosure",
+        "performance-review",
         "platform-norms",
         "draft-post",
         "repurpose",
@@ -227,3 +234,19 @@ def test_skill_frontmatter_is_valid_and_names_real_tools(skill_path, registry):
     for tool_name in front.get("tools", []):
         if tool_name.startswith("social_"):
             assert tool_name in known, f"{skill_path.parent.name} declares unknown tool {tool_name}"
+
+
+def test_queue_route_exposes_the_hold(client):
+    from social import store
+
+    assert client.get("/api/plugins/social/queue").json()["hold"] is None
+    store.hold("an outage")
+    body = client.get("/api/plugins/social/queue").json()
+    assert body["hold"]["reason"] == "an outage"
+
+
+def test_the_board_renders_a_hold_banner():
+    # A hold nobody can see is theatre — the board is where someone looks first.
+    assert 'id="hold"' in view.PAGE
+    assert "Queue held" in view.PAGE
+    assert "esc(data.hold.reason)" in view.PAGE, "the reason is operator text and must be escaped"

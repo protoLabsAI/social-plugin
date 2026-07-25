@@ -58,6 +58,47 @@ _URL_RE = re.compile(
     re.IGNORECASE,
 )
 _HASHTAG_RE = re.compile(r"(?<!\w)#(\w+)")
+
+# Wording the FTC treats as adequate for disclosing a material connection. There is
+# nothing special about the hash — "Ad:" reads the same as "#ad" — so both forms count.
+DISCLOSURE_TOKENS = (
+    "#ad",
+    "ad:",
+    "advertisement",
+    "#advert",
+    "#sponsored",
+    "sponsored by",
+    "paid partnership",
+    "#paidpartnership",
+    "paid promotion",
+    "#gifted",
+    "gifted by",
+    "was gifted",
+    "sent me",
+    "#affiliate",
+    "affiliate link",
+    "commission",
+    "i work for",
+    "we work for",
+    "i work at",
+    "my employer",
+    "#employee",
+)
+
+# Wording the FTC has specifically called inadequate: abbreviations and warm words
+# that a reader can't reliably decode as "this is an ad".
+VAGUE_DISCLOSURES = (
+    "#sp",
+    "#spon",
+    "#collab",
+    "#partner",
+    "#ambassador",
+    "thanks to",
+    "thank you to",
+    "in partnership with",
+    "teamed up with",
+    "#gift",
+)
 _MENTION_RE = re.compile(r"(?<!\w)@(\w+)")
 _CAPS_RUN_RE = re.compile(r"\b[A-Z]{2,}(?:\s+[A-Z]{2,}){2,}\b")
 
@@ -144,6 +185,107 @@ def _pair(value: Any) -> tuple[int, int] | None:
         return None
 
 
+def _disclosure_position(text: str) -> tuple[str, int] | None:
+    """The earliest adequate disclosure in the text, and where it starts."""
+    low = (text or "").lower()
+    hits = [(tok, low.find(tok)) for tok in DISCLOSURE_TOKENS if tok in low]
+    return min(hits, key=lambda h: h[1]) if hits else None
+
+
+def _check_disclosure(text: str, connection: str, fold: int, add) -> None:
+    """FTC Endorsement Guides checks, run only when a material connection exists.
+
+    The Guides don't dictate placement, but they're explicit that a disclosure is
+    weaker at the end of a long post or mixed into a block of hashtags, and on
+    surfaces that truncate it must be readable without clicking "more". The fold
+    position comes from researched norms, so where none exist that check is skipped
+    rather than guessed.
+    """
+    if connection in ("", "none"):
+        return
+
+    found = _disclosure_position(text)
+    if not found:
+        add(
+            "error",
+            "missing_disclosure",
+            f"This post has a {connection.replace('_', ' ')} relationship behind it and no disclosure in the copy.",
+            'Say it plainly and early — "#ad", "Sponsored by X", "I work at X". Each post needs its own; '
+            "a platform's built-in label is not enough on its own.",
+        )
+        for vague in VAGUE_DISCLOSURES:
+            if vague in text.lower():
+                add(
+                    "warn",
+                    "vague_disclosure",
+                    f"{vague!r} is not a disclosure a reader can decode — the FTC has said so specifically.",
+                    'Replace it with "#ad", "Sponsored by X", or plain words.',
+                )
+                break
+        return
+
+    token, at = found
+    n = len(text)
+    if fold and at >= fold:
+        add(
+            "error",
+            "disclosure_below_fold",
+            f"The disclosure ({token!r}) sits at character {at}, below the ~{fold}-character fold.",
+            "Move it above the fold — it has to be readable without clicking 'more'.",
+        )
+    elif n > 300 and at > n * 0.6:
+        add(
+            "warn",
+            "disclosure_buried",
+            f"The disclosure ({token!r}) is in the last part of a {n:,}-character post.",
+            "A disclosure at the end of a long post is easy to miss. Move it up.",
+        )
+
+    trailing = text[at:]
+    if _HASHTAG_RE.findall(trailing) and len(_HASHTAG_RE.findall(trailing)) >= 3 and token.startswith("#"):
+        add(
+            "warn",
+            "disclosure_in_hashtag_block",
+            f"The disclosure ({token!r}) is inside a run of hashtags.",
+            "Mixed into a hashtag block it reads as decoration. Put it in the sentence.",
+        )
+
+
+def _check_accessibility(text: str, alt_text: str, add) -> None:
+    """Rules that cost a real reader something when they're broken."""
+    for tag in _HASHTAG_RE.findall(text):
+        # A screen reader can't split an all-lowercase run into words. Short tags read
+        # fine letter-by-letter; long ones become mush.
+        if len(tag) > 10 and tag.islower() and tag.isalpha():
+            add(
+                "info",
+                "hashtag_case",
+                f"#{tag} is all lowercase — a screen reader reads it as one run of letters.",
+                f"Capitalise each word: #{tag.capitalize()} style (CamelCase). It looks identical to sighted readers.",
+            )
+            break
+
+    alt = (alt_text or "").strip()
+    if alt:
+        low = alt.lower()
+        for prefix in ("image of", "picture of", "photo of", "graphic of", "screenshot of", "a photo of"):
+            if low.startswith(prefix):
+                add(
+                    "info",
+                    "alt_text_prefix",
+                    f"Alt text opens with {prefix!r} — screen readers already announce that it's an image.",
+                    "Start with what the image shows.",
+                )
+                break
+        if len(alt) > 125:
+            add(
+                "info",
+                "alt_text_long",
+                f"Alt text is {len(alt)} characters; under ~125 is the readable range.",
+                "Describe what matters and what it means, not every detail.",
+            )
+
+
 def check(
     text: str,
     platform: str,
@@ -152,6 +294,7 @@ def check(
     has_media: bool = False,
     alt_text: str = "",
     title: str = "",
+    material_connection: str = "",
 ) -> dict[str, Any]:
     """Grade one draft. Returns ``{platform, chars, score, verdict, findings, hook}``.
 
@@ -350,6 +493,11 @@ def check(
             "Media with no alt text." + (f" On {spec.label} alt text is {alt_expectation}." if alt_expectation else ""),
             "Describe what the image shows and what it means, in one sentence.",
         )
+
+    # ── disclosure — law, not taste, so it outranks everything below ─────────
+    _check_disclosure(text, (material_connection or "").strip().lower(), fold, add)
+
+    _check_accessibility(text, alt_text, add)
 
     # ── polish ────────────────────────────────────────────────────────────────
     if not _has_cta(text, brandkit.ctas(kit)) and n:

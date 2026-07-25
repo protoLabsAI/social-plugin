@@ -16,10 +16,13 @@ produces the content; a person publishes it. That's a deliberate boundary — se
 | **Platform limits** | What nine surfaces *enforce*: character caps, field caps, image dimensions, whether captions make links clickable. Compiled in, because the platform rejects the post otherwise. |
 | **Platform norms** | What currently *works* there — length band, hashtag counts, the "…more" fold, link demotion. Researched by the agent, stored with its sources and the date, editable by you. Never compiled in. |
 | **Content queue** | A board — idea → drafted → needs edit → approved → scheduled → posted — with pillar and campaign tagging, so the calendar stays balanced and nothing gets lost. |
-| **Linter** | Grades a draft 0–100 against the platform and the brand: over-length, hashtag spam, demoted links, missing alt text, banned phrases, and the cadence that makes copy read as machine-written. |
+| **Linter** | Grades a draft 0–100 against the platform, the brand, and disclosure law: over-length, hashtag spam, demoted links, missing or badly-placed sponsorship disclosures, accessibility problems, banned phrases, and the cadence that makes copy read as machine-written. |
+| **Disclosure** | Whenever a post has a sponsorship, gift, affiliate link, or employment behind it, the FTC's actual rules are checked — including that the disclosure sits above the fold and isn't buried in a hashtag block. Missing means *blocked*. |
+| **Crisis hold** | One call stops the queue when scheduled content becomes a liability. While held, the export pack refuses to build. |
+| **Results** | Record what published posts actually did; the performance read-back tells you what worked — and refuses to draw conclusions from too few posts. |
 | **Export** | A markdown pack with every approved post in its own copy block, in send order — or CSV for a scheduling tool. |
-| **Crew** | `social_writer` and `social_editor` subagents, so a batch of posts isn't nine variations of one sentence. |
-| **Skills** | `brand-kit-setup`, `platform-norms`, `content-calendar`, `draft-post`, `repurpose`, `engagement-prep`. |
+| **Crew** | `social_writer`, `social_editor`, and `social_researcher` subagents, so a batch of posts isn't nine variations of one sentence and norms research stays out of the main context. |
+| **Skills** | `brand-kit-setup`, `platform-norms`, `content-calendar`, `draft-post`, `repurpose`, `engagement-prep`, `disclosure`, `crisis-response`, `performance-review`. |
 | **View** | A "Social Studio" rail panel: the queue as a board, with a copy button on every card. |
 
 Platforms carried: X, LinkedIn, Instagram, Threads, Bluesky, TikTok, YouTube, Facebook, Reddit.
@@ -156,6 +159,58 @@ linkedin · 1,240 chars · score 74/100 · REVISE
 
 Errors block, warnings cost 8 points, notes cost 2. `blocked` never reaches the operator.
 
+## Disclosure
+
+If anything of value sits behind a post — a sponsorship, a gifted product, an affiliate link,
+an employee writing about their own employer — say so on the post and the FTC rules get checked:
+
+```
+social_queue_add(platform="instagram", material_connection="gifted", body="...")
+```
+
+A recorded connection with no disclosure in the copy is **blocked**, not warned. Beyond
+presence, the linter checks the things the Endorsement Guides actually turn on: that the
+disclosure is readable **above the fold** (using the platform's researched fold position), that
+it isn't stranded at the end of a long post, and that it isn't buried in a run of hashtags. It
+also rejects the wording the FTC has specifically called inadequate — `#sp`, `#collab`,
+`#ambassador`, "Thanks to…".
+
+The `disclosure` skill carries the rules and links to
+[the FTC's own FAQ](https://www.ftc.gov/business-guidance/resources/ftcs-endorsement-guides-what-people-are-asking).
+Worth knowing: a lot of 2026 marketing content asserts a blanket "AI-generated content must be
+labelled" rule. That isn't in the Endorsement Guides. What *is* there is a ban on fake reviews
+and endorsements from people who don't exist — which the skill covers, and which matters far
+more.
+
+## Holding the queue
+
+The damage in a social crisis usually isn't the crisis. It's the cheerful product post that
+goes out during it.
+
+```
+social_hold_queue(reason="datacentre outage, customers affected")
+```
+
+While a hold is on, `social_export` refuses to build a publish pack, the calendar leads with
+the hold, and the board shows it. Releasing is the operator's call — the agent can stop the
+queue on its own judgment, but it doesn't restart it on its own judgment.
+
+## Knowing whether any of it worked
+
+There's no analytics API in a draft-only tool, so the numbers come back by hand:
+
+```
+social_record_results(post_id=12, impressions=4200, engagements=310,
+                      outcome="two demo requests, one from a customer we'd been chasing")
+social_performance(days=90)
+```
+
+`social_performance` groups by platform, pillar, and length — and **under-claims on purpose**.
+Below 8 posts it refuses to compare anything; below 4 in a group it won't rank that group; it
+states every sample size and leads with what actually came of the work rather than impression
+counts. A marketing report confidently over-reading twelve data points is worse than no report,
+because someone rebuilds a strategy on it.
+
 ## Why draft-only
 
 Publishing was left out on purpose, not for lack of time:
@@ -176,7 +231,7 @@ for.
 
 ```bash
 python3.12 -m venv .venv && .venv/bin/pip install -r requirements-dev.txt ruff
-.venv/bin/python -m pytest -q      # 166 tests, no protoAgent host required
+.venv/bin/python -m pytest -q      # 229 tests, no protoAgent host required
 .venv/bin/ruff check . && .venv/bin/ruff format --check .
 ```
 

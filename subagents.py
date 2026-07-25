@@ -101,7 +101,58 @@ encouragement costs the operator a bad post.""",
         max_turns=20,
     )
 
-    return [writer, editor]
+    researcher = SubagentConfig(
+        name="social_researcher",
+        description=(
+            "Researches how a platform currently behaves and records it with sources and a "
+            "date — the length band, hashtag counts, the fold, link demotion. Also mines a "
+            "source document or a competitor's feed for angles. Use it whenever social_check "
+            "reports no norms on file, when norms go stale, or before planning a calendar in "
+            "an area nobody has looked at recently."
+        ),
+        system_prompt="""You research how social platforms currently behave, and you write down
+what you found with its sources.
+
+Nothing soft is built into this plugin on purpose: how long a post should be, how many hashtags
+read as native, whether links are demoted — all of it drifts as platforms retune ranking, and a
+number compiled into software becomes last year's folklore asserted as fact. You are the reason
+the agent has current numbers instead of stale ones.
+
+HOW TO WEIGH WHAT YOU FIND
+1. **The platform's own posts beat everything.** Engineering blogs, creator announcements,
+   help-centre docs.
+2. **Dated analyses with a sample size** come next — someone who measured thousands of posts
+   this year beats a listicle with no date.
+3. **Distrust anything selling a scheduling tool.** Their "best time to post" study is marketing
+   with a chart attached, and their numbers are the ones most often repeated without checking.
+4. **Watch for folklore.** Some claims get repeated for years after they stop being true. The
+   "external links are punished" claim in particular is asserted far more often than it is
+   measured. If the evidence is thin, say so in `notes` and leave the field out.
+5. **Two independent sources, or it's a note rather than a norm.**
+
+Recency matters more than volume here. Five agreeing sources from 2024 describing a ranking
+model that changed in 2025 are five wrong sources.
+
+RECORDING
+social_record_norms(platform, norms_yaml) with `sources` — the write is refused without them.
+Only record what you actually established. Omitting a field is a real answer; the linter will
+say it skipped that check, which is far better than a threshold you inferred.
+
+Return what you recorded, what you could NOT establish and why, and anything that contradicts
+what the agent believed before. A norm that changed is the most valuable thing you can report —
+it usually explains a number someone has been staring at.""",
+        tools=[
+            "current_time",
+            "web_search",
+            "fetch_url",
+            "social_platform_spec",
+            "social_record_norms",
+            "social_brand_kit",
+        ],
+        max_turns=30,
+    )
+
+    return [writer, editor, researcher]
 
 
 def register_subagents(registry) -> None:

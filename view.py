@@ -58,6 +58,10 @@ PAGE = r"""<!doctype html>
   .empty{color:var(--pl-color-fg-muted,#999);font-size:12px;padding:6px 2px}
   .note{color:var(--pl-color-fg-muted,#999);font-size:12px;margin-top:10px}
   #err{display:block;margin-bottom:10px}
+  #hold{display:block;margin-bottom:10px;border:1px solid var(--pl-color-danger,#e5484d);
+    border-radius:var(--pl-radius-md,8px);padding:8px 10px;
+    background:color-mix(in srgb, var(--pl-color-danger,#e5484d) 12%, transparent)}
+  #hold b{color:var(--pl-color-danger,#e5484d)}
   [hidden]{display:none !important}
 </style>
 <script>
@@ -73,6 +77,7 @@ PAGE = r"""<!doctype html>
     <div class="pillars" id="pillars"></div>
   </header>
   <div id="err" class="pl-callout pl-callout--error" hidden></div>
+  <div id="hold" hidden></div>
   <div class="board" id="board"></div>
   <div class="note" id="note"></div>
 </div>
@@ -125,6 +130,17 @@ PAGE = r"""<!doctype html>
       err.hidden = true;
 
       document.getElementById("brand").textContent = data.brand ? `· ${data.brand}` : "";
+
+      // A hold is the most important thing on this page when it's on — nothing
+      // queued should go out, and the board is where someone would look first.
+      const holdEl = document.getElementById("hold");
+      if (data.hold) {
+        holdEl.hidden = false;
+        holdEl.innerHTML = `<b>Queue held</b> since ${esc(data.hold.since)} — ${esc(data.hold.reason)}` +
+          `<br>Nothing below should be published until the hold is lifted.`;
+      } else {
+        holdEl.hidden = true;
+      }
 
       const pillars = Object.entries(data.pillars || {});
       document.getElementById("pillars").innerHTML = pillars.length

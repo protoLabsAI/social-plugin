@@ -49,6 +49,7 @@ def build_data_router():
                 "posts": store.list_posts(limit=200),
                 "pillars": store.pillar_balance(),
                 "brand": brand,
+                "hold": store.hold_state(),
             }
         )
 

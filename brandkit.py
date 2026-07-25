@@ -173,6 +173,14 @@ def emoji_policy(data: dict[str, Any] | None) -> str:
     return policy if policy in EMOJI_POLICIES else "sparing"
 
 
+def disclosure(data: dict[str, Any] | None) -> dict[str, Any]:
+    """The brand's standing disclosure policy — the label it uses and the relationships
+    that always need declaring (an affiliate programme, staff who post about the product).
+    Empty is a real answer for a brand that has no commercial relationships to declare."""
+    row = (data or {}).get("disclosure")
+    return row if isinstance(row, dict) else {}
+
+
 def ctas(data: dict[str, Any] | None) -> list[str]:
     return [str(x) for x in (data or {}).get("ctas", []) if str(x).strip()]
 
@@ -298,6 +306,19 @@ def brief(data: dict[str, Any] | None = None, section: str = "") -> str:
             rows.append(f"- Avoid: {', '.join(avoid_phrases(data))}")
         blocks["voice"] = "\n".join(rows)
 
+    disc = disclosure(data)
+    if disc:
+        rows = ["## Disclosure"]
+        if disc.get("label"):
+            rows.append(f"- Standard label: {disc['label']}")
+        rels = disc.get("relationships")
+        if isinstance(rels, list) and rels:
+            rows.append("- Always declare: " + ", ".join(str(r) for r in rels))
+        if disc.get("policy"):
+            rows.append(f"- House rule: {disc['policy']}")
+        rows.append("- A disclosure goes in the post itself, early enough to read before the fold.")
+        blocks["disclosure"] = "\n".join(rows)
+
     proof = data.get("proof")
     if isinstance(proof, list) and proof:
         blocks["proof"] = "## Proof points (use real numbers, never invent them)\n" + "\n".join(f"- {p}" for p in proof)
@@ -391,6 +412,12 @@ proof: []
 offers:
   - name: ""
     url: ""
+
+# Commercial relationships that have to be declared in the post itself.
+disclosure:
+  label: ""               # the wording you use, e.g. "#ad" or "Sponsored by Acme"
+  relationships: []       # standing ones: affiliate, gifted, employee, own_product
+  policy: ""              # any house rule beyond the legal minimum
 
 ctas: []                  # rotate these instead of ending every post the same way
 

@@ -121,12 +121,18 @@ def build_tools(registry):
         has_media: bool = False,
         alt_text: str = "",
         title: str = "",
+        material_connection: str = "",
     ) -> str:
-        """Lint a draft against the platform's limits and the brand's voice before it ships.
-        Catches over-length posts, hashtag counts that read as spam, links that get demoted,
-        banned phrases, missing alt text, and cadence that reads as machine-written. Returns a
-        score out of 100 and a verdict (ship / revise / blocked) with specific fixes. Pass a
-        post_id instead of text to check a queued post and record its score."""
+        """Lint a draft against the platform's limits, the brand's voice, and disclosure law
+        before it ships. Catches over-length posts, hashtag counts that read as spam, links
+        that get demoted, banned phrases, missing or badly-placed sponsorship disclosures,
+        accessibility problems, and cadence that reads as machine-written. Returns a score out
+        of 100 and a verdict (ship / revise / blocked) with specific fixes.
+
+        Pass material_connection when anything of value sits behind the post — 'sponsored',
+        'gifted', 'affiliate', 'employee', 'partner', or 'own_product' — and the disclosure
+        rules are checked too. Pass a post_id instead of text to check a queued post (its
+        recorded connection is used) and record its score."""
         if post_id:
             row = store.get(int(post_id))
             if not row:
@@ -136,6 +142,7 @@ def build_tools(registry):
             alt_text = alt_text or row.get("alt_text", "")
             title = title or row.get("title", "")
             has_media = has_media or bool(row.get("assets"))
+            material_connection = material_connection or row.get("material_connection", "")
         if not platform:
             return "Which platform? Pass one of: " + ", ".join(platforms.known())
         try:
@@ -143,7 +150,15 @@ def build_tools(registry):
         except Exception:  # noqa: BLE001 — lint on platform rules alone rather than refusing
             kit = None
             log.warning("[social] brand kit unreadable; linting on platform rules only")
-        result = lint.check(text, platform, kit=kit, has_media=has_media, alt_text=alt_text, title=title)
+        result = lint.check(
+            text,
+            platform,
+            kit=kit,
+            has_media=has_media,
+            alt_text=alt_text,
+            title=title,
+            material_connection=material_connection,
+        )
         out = lint.render(result)
         if post_id:
             store.update(int(post_id), score=result["score"])
@@ -166,11 +181,14 @@ def build_tools(registry):
         alt_text: str = "",
         source: str = "",
         notes: str = "",
+        material_connection: str = "",
     ) -> str:
         """Put a post in the queue. Use status 'idea' when planning a calendar and 'drafted'
         once the copy exists. scheduled_for is an ISO date or datetime (2026-08-03 or
         2026-08-03T09:30). pillar ties it to a content pillar so the calendar stays balanced;
-        source records where a repurposed piece came from. Returns the new post's id."""
+        source records where a repurposed piece came from. Set material_connection whenever
+        anything of value sits behind the post ('sponsored', 'gifted', 'affiliate', 'employee',
+        'partner', 'own_product') so the disclosure rules get checked. Returns the new post's id."""
         try:
             row = store.add(
                 platform=platforms.normalize(platform),
@@ -184,6 +202,7 @@ def build_tools(registry):
                 alt_text=alt_text,
                 source=source,
                 notes=notes,
+                material_connection=material_connection,
             )
         except ValueError as e:
             return f"Not queued — {e}"
@@ -262,6 +281,7 @@ def build_tools(registry):
         which platform, under which pillar — plus the days with nothing planned and how the
         pillar mix compares to the brand kit's targets. Use it to spot gaps and imbalance
         before drafting more of what's already over-represented."""
+        held = store.hold_state()
         rows = store.calendar(days=days)
         kit = None
         try:
@@ -270,8 +290,9 @@ def build_tools(registry):
             pass
 
         if not rows:
+            prefix = f"⛔ QUEUE HELD since {held['since']} — {held['reason']}\n\n" if held else ""
             return (
-                f"Nothing scheduled in the next {days} days. "
+                prefix + f"Nothing scheduled in the next {days} days. "
                 "Plan with the `content-calendar` skill, or schedule queued drafts with social_queue_update."
             )
 
@@ -279,7 +300,14 @@ def build_tools(registry):
         for r in rows:
             by_day.setdefault((r["scheduled_for"] or "")[:10], []).append(r)
 
-        lines = [f"Calendar — next {days} days ({len(rows)} scheduled)", ""]
+        lines = []
+        if held:
+            lines += [
+                f"⛔ QUEUE HELD since {held['since']} — {held['reason']}",
+                "Nothing below should go out until the operator lifts the hold.",
+                "",
+            ]
+        lines += [f"Calendar — next {days} days ({len(rows)} scheduled)", ""]
         for day in sorted(by_day):
             lines.append(day)
             for r in by_day[day]:
@@ -303,12 +331,27 @@ def build_tools(registry):
         return "\n".join(lines)
 
     @tool
-    def social_export(status: str = "approved", fmt: str = "markdown", campaign: str = "", limit: int = 100) -> str:
+    def social_export(
+        status: str = "approved",
+        fmt: str = "markdown",
+        campaign: str = "",
+        limit: int = 100,
+        override_hold: bool = False,
+    ) -> str:
         """Export the queue as a ready-to-publish pack — the deliverable the operator works
         through by hand. 'markdown' gives each post in its own copy block with hashtags, alt
         text, and assets attached, in the order they go out; 'csv' gives the column shape a
         scheduling tool imports. Defaults to the approved posts. Saves a file and returns its
-        path plus a preview."""
+        path plus a preview. Refuses while the queue is held, unless the operator has explicitly
+        decided otherwise (override_hold)."""
+        held = store.hold_state()
+        if held and not override_hold:
+            return (
+                f"The queue is HELD (since {held['since']}): {held['reason']}\n\n"
+                "Refusing to build a publish pack — that's the whole point of a hold. If the "
+                "operator has decided this specific content is safe to send anyway, call again "
+                "with override_hold=true and say in your reply that you did."
+            )
         rows = store.list_posts(status=status, campaign=campaign, limit=limit)
         if not rows:
             return f"Nothing with status '{status}' to export. Approve some drafts first."
@@ -322,12 +365,121 @@ def build_tools(registry):
         more = f"\n\n… plus {len(rows) - 2} more in the file." if len(rows) > 2 else ""
         return f"Exported {len(rows)} post(s) to {path}\n\n{preview}{more}"
 
+    # ── the crisis stop ───────────────────────────────────────────────────────
+    @tool
+    def social_hold_queue(reason: str) -> str:
+        """Stop the queue. Use this the moment something happens that makes scheduled content
+        a liability — a crisis at the company, a public tragedy, an outage, a story breaking
+        about the brand or its industry. While a hold is on, the export pack refuses to build,
+        so nothing queued can be handed over for publishing by accident.
+
+        The damage in a crisis is rarely the crisis itself; it's the cheerful product post that
+        goes out in the middle of it. Hold first and ask afterwards — a hold costs a delay, and
+        not holding costs a screenshot that outlives the campaign."""
+        try:
+            state = store.hold(reason)
+        except ValueError as e:
+            return f"Not held — {e}"
+        _emit("queue_held", {"reason": state["reason"]})
+        pending = [r for r in store.list_posts(limit=500) if r["status"] in ("approved", "scheduled")]
+        out = f"Queue HELD as of {state['since']}.\nReason: {state['reason']}\n\n"
+        out += f"{len(pending)} approved/scheduled post(s) are now blocked from export.\n"
+        out += "Tell the operator what's held and why. Nothing resumes until they say so."
+        return out
+
+    @tool
+    def social_release_queue(note: str = "") -> str:
+        """Lift a queue hold and let scheduled content flow again. Only do this when the
+        operator has explicitly said to resume — releasing is their call, never yours, in the
+        same way approving a post is. Record what changed in `note`.
+
+        Before resuming, re-read what's queued: a post written last week may read very
+        differently after whatever caused the hold."""
+        state = store.hold_state()
+        if not state:
+            return "There's no hold on the queue."
+        store.release()
+        _emit("queue_released", {"note": note})
+        pending = [r for r in store.list_posts(limit=500) if r["status"] in ("approved", "scheduled")]
+        return (
+            f"Hold lifted (it was set {state['since']} — {state['reason']}).\n"
+            f"{len(pending)} approved/scheduled post(s) can be exported again. "
+            "Re-read them before anything goes out; tone that was fine last week may not be now."
+        )
+
+    # ── the learning loop ─────────────────────────────────────────────────────
+    @tool
+    def social_record_results(
+        post_id: int,
+        impressions: int = 0,
+        engagements: int = 0,
+        clicks: int = 0,
+        saves: int = 0,
+        shares: int = 0,
+        comments: int = 0,
+        followers_gained: int = 0,
+        outcome: str = "",
+        notes: str = "",
+    ) -> str:
+        """Record what a published post actually did, from numbers the operator read off the
+        platform. Marks the post 'posted'. This is the only way a draft-only agent ever learns
+        whether any of its work landed — without it, every calendar is a guess repeated.
+
+        `outcome` is for what the numbers can't hold: a reply from a customer, a demo booked,
+        a hire, a link picked up somewhere. That's usually the more valuable signal. Merges
+        with anything already recorded, so week-two numbers don't erase week-one's."""
+        row = store.get(int(post_id))
+        if not row:
+            return f"No queued post with id {post_id}."
+        metrics = {
+            "impressions": impressions,
+            "engagements": engagements,
+            "clicks": clicks,
+            "saves": saves,
+            "shares": shares,
+            "comments": comments,
+            "followers_gained": followers_gained,
+            "outcome": outcome,
+            "notes": notes,
+        }
+        updated = store.record_results(int(post_id), {k: v for k, v in metrics.items() if v})
+        if not updated:
+            return f"No queued post with id {post_id}."
+        _emit("results_recorded", {"id": int(post_id)})
+        n = len(store.with_results())
+        return (
+            f"Recorded results for #{post_id} ({updated['platform']}, marked posted).\n"
+            f"{n} post(s) now carry results. "
+            + (
+                "Enough to look for patterns — run social_performance."
+                if n >= 8
+                else "Too few yet to read anything into."
+            )
+        )
+
+    @tool
+    def social_performance(days: int = 90, platform: str = "") -> str:
+        """Report what actually performed, from the results recorded against posted posts —
+        broken down by platform, pillar, and length. Use it before planning a calendar, so the
+        next fortnight is informed by the last one rather than repeating it.
+
+        It states its own sample size and refuses to draw conclusions from too little data.
+        Social numbers are noisy: a difference across six posts is not a finding, and treating
+        it as one is how brands end up chasing an accident."""
+        from . import performance
+
+        return performance.report(days=days, platform=platform)
+
     return [
         social_brand_kit,
         social_save_brand_kit,
         social_platform_spec,
         social_record_norms,
         social_check,
+        social_hold_queue,
+        social_release_queue,
+        social_record_results,
+        social_performance,
         social_queue_add,
         social_queue_list,
         social_queue_update,
