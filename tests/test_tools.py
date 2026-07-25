@@ -216,3 +216,38 @@ def test_export_emits_so_the_panel_can_light_up(tools):
     store.add(platform="x", status="approved", body="Hi.")
     call(tools, "social_export")
     assert any(topic == "export_ready" for topic, _ in tools.events)
+
+
+def test_queue_list_can_read_one_post_in_full(tools):
+    # Found by dogfooding: told to fix a post in place, the agent had no way to READ
+    # it — the list view truncates bodies, so it asked the operator to paste the text.
+    from social import store
+
+    body = "A complete post body that runs well past the point where the list view would cut it off. " * 3
+    row = store.add(
+        platform="linkedin",
+        body=body,
+        status="drafted",
+        pillar="Teardowns",
+        hashtags="#devops",
+        alt_text="A latency chart.",
+        material_connection="gifted",
+        notes="needs a disclosure",
+    )
+    out = call(tools, "social_queue_list", post_id=row["id"])
+    assert body.strip() in out, "the complete body must come back untruncated"
+    assert "material connection: gifted" in out
+    assert "#devops" in out and "A latency chart." in out
+    assert "needs a disclosure" in out
+
+
+def test_reading_a_missing_post_by_id_is_reported(tools):
+    assert "No queued post with id 99" in call(tools, "social_queue_list", post_id=99)
+
+
+def test_the_blocked_hint_names_the_read_call_too(tools):
+    from social import store
+
+    row = store.add(platform="x", body="a" * 400)
+    out = call(tools, "social_check", post_id=row["id"])
+    assert f"social_queue_list(post_id={row['id']})" in out

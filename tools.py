@@ -165,8 +165,9 @@ def build_tools(registry):
             out += f"\n\n(Recorded score {result['score']} on post {post_id}.)"
             if result["verdict"] != "ship":
                 out += (
-                    f"\nFix it in place: social_queue_update(post_id={post_id}, body=...) "
-                    "then re-check. Don't queue another draft."
+                    f"\nFix it in place: read the full text with social_queue_list(post_id={post_id}), "
+                    f"then social_queue_update(post_id={post_id}, body=...) and re-check. "
+                    "Don't queue another draft."
                 )
         if kit is None and brandkit.exists() is False:
             out += "\n\nNote: no brand kit yet, so voice rules weren't checked."
@@ -227,11 +228,48 @@ def build_tools(registry):
         return f"Queued #{row['id']} — {row['platform']} ({row['status']}){slot}."
 
     @tool
-    def social_queue_list(status: str = "", platform: str = "", campaign: str = "", limit: int = 25) -> str:
+    def social_queue_list(
+        status: str = "",
+        platform: str = "",
+        campaign: str = "",
+        limit: int = 25,
+        post_id: int = 0,
+    ) -> str:
         """List what's in the content queue. Filter by status (idea, drafted, needs_edit,
         approved, scheduled, posted, archived — or 'open' for everything still needing work),
         by platform, or by campaign. Use it to see what's ready, what's stuck, and what to
-        work on next."""
+        work on next.
+
+        Pass post_id to read ONE post in full — the complete body, hashtags, alt text,
+        material connection, and notes, untruncated. Do that before editing a post in place;
+        the list view abbreviates bodies and you cannot rewrite what you have only skimmed."""
+        if post_id:
+            row = store.get(int(post_id))
+            if not row:
+                return f"No queued post with id {post_id}."
+            lines = [
+                f"#{row['id']} — {row['platform']} [{row['status']}]",
+                f"  pillar: {row['pillar'] or '—'}   campaign: {row['campaign'] or '—'}",
+                f"  scheduled: {row['scheduled_for'] or '—'}   score: {row['score'] or '—'}",
+                f"  material connection: {row['material_connection'] or 'none recorded'}",
+            ]
+            if row["title"]:
+                lines.append(f"  title: {row['title']}")
+            lines += ["", "BODY (complete):", row["body"] or "(empty)", ""]
+            for label, key in (
+                ("hashtags", "hashtags"),
+                ("alt text", "alt_text"),
+                ("source", "source"),
+                ("notes", "notes"),
+            ):
+                if row.get(key):
+                    lines.append(f"  {label}: {row[key]}")
+            if row.get("assets"):
+                lines.append(f"  assets: {', '.join(str(a) for a in row['assets'])}")
+            if row.get("results"):
+                lines.append(f"  results: {row['results']}")
+            return "\n".join(lines)
+
         rows = store.list_posts(status=status, platform=platform, campaign=campaign, limit=limit)
         if not rows:
             counts = store.counts()
