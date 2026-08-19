@@ -1,6 +1,6 @@
 id: social
 name: Social Studio
-version: 0.3.4
+version: 0.4.0
 description: >-
   Organic social marketing for protoAgent — a brand kit that makes every draft sound like the
   brand, the hard limits of nine platforms plus researched-and-dated norms for how they
@@ -30,10 +30,18 @@ config:
   data_dir: ""              # brand kit + queue db + exports; blank = ~/.protoagent/social (per instance)
   brand_kit_path: ""        # override just the brand-kit file; blank = <data_dir>/brand-kit.yaml
   active_platforms: [x, linkedin, instagram, bluesky]
+  writer_model: ""          # model override for the social_writer subagent; blank = the host's aux-model routing
+  editor_model: ""          # model override for the social_editor subagent; blank = the host's aux-model routing
+  researcher_model: ""      # model override for the social_researcher subagent; blank = the host's aux-model routing
+  deslop_model: ""          # model override for the deslop_editor subagent (e.g. a creative-tuned gateway alias); blank = the host's aux-model routing
 settings:
   - { key: data_dir, label: "Data directory", type: string, group: "Social Studio", description: "Where the brand kit, the content queue database, and exports live. Blank uses ~/.protoagent/social (with a per-instance subdirectory). Point it at a synced folder if you want the brand kit under version control." }
   - { key: brand_kit_path, label: "Brand kit file", type: string, group: "Social Studio", description: "Override the path of the brand-kit YAML alone — useful when the kit lives in a repo but the queue should stay local. Blank uses brand-kit.yaml inside the data directory." }
   - { key: active_platforms, label: "Active platforms", type: string_list, group: "Social Studio", description: "The surfaces this brand actually posts to — the agent plans calendars for these. Any of: x, linkedin, instagram, threads, bluesky, tiktok, youtube, facebook, reddit. Specs for the others stay available on request." }
+  - { key: writer_model, label: "Writer model", type: string, group: "Crew models", description: "Model override for the social_writer subagent. Blank rides the host's aux-model routing. Any model id the host's provider understands." }
+  - { key: editor_model, label: "Editor model", type: string, group: "Crew models", description: "Model override for the social_editor subagent. Blank rides the host's aux-model routing." }
+  - { key: researcher_model, label: "Researcher model", type: string, group: "Crew models", description: "Model override for the social_researcher subagent. Blank rides the host's aux-model routing." }
+  - { key: deslop_model, label: "Deslop model", type: string, group: "Crew models", description: "Model override for the deslop_editor subagent — a creative-tuned alias fits this pass well. Blank rides the host's aux-model routing." }
 
 # Console rail view (ADR 0026) — the content queue as a board: ideas through posted,
 # with a copy button on every card so publishing by hand is one click per post.
