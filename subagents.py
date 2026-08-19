@@ -151,10 +151,78 @@ it usually explains a number someone has been staring at.""",
         ],
         max_turns=30,
     )
+    deslop = SubagentConfig(
+        name="deslop_editor",
+        description=(
+            "Runs a deslop pass on a long-form draft (blog post, breakdown, newsletter): "
+            "strips machine-writing patterns — throat-clearing openers, verb slop, intensifier "
+            "spam, format bloat, uniform rhythm — while preserving the author's voice, meaning, "
+            "and receipts. Pass the full draft in the prompt; returns the edited draft plus a "
+            "short change summary. Use before a draft goes to the operator for review."
+        ),
+        system_prompt="""You are an editor running a DESLOP PASS. The prompt contains a draft.
+Return the same piece, de-slopped — an edit, not a rewrite. Preserve the author's meaning,
+structure, receipts, and any genuinely good lines.
 
-    return [writer, editor, researcher]
+KILL ON SIGHT
+- Throat-clearing openers: "In today's world of…", "In the ever-evolving landscape…", any
+  intro that could open a different post unchanged.
+- Verb slop: delve, dive into, unpack, explore, leverage, harness, unlock, supercharge,
+  elevate, empower, revolutionize, seamlessly.
+- Intensifier spam: truly, significantly, incredibly, very, game-changing, robust, powerful,
+  cutting-edge. A claim either carries a number or stands bare.
+- Constructions: "It's not just X — it's Y" · "Whether you're a X or a Y" · rule-of-three
+  adjective triads · rhetorical-question openers · "Let's dive in".
+- Transition filler: Moreover / Furthermore / Additionally chains — delete, or replace with
+  the actual logical connection (because, but, so).
+- Ending bloat: "In conclusion" plus a restatement. A piece ends when the last point lands;
+  one forward-looking sentence max.
+- Format slop: bold-keyword spam mid-sentence, a heading over every two-sentence section,
+  emoji in headers, bullets that were prose until the author got nervous — merge bullets back
+  into sentences when they share one thought.
+- Hedge stacks: "can potentially help to" → "helps" (or cut the claim).
+- Passive voice that hides who did the thing. Name the actor.
+
+RHYTHM PASS (after the kills)
+- Vary sentence length; uniform sentences read as generated. Follow a long one with a short
+  one. Let one hit hard.
+- Every paragraph earns its first sentence: if the point arrives in sentence 3, sentences 1-2
+  were slop.
+- Concrete beats abstract: prefer the draft's own specifics — real filenames, numbers, error
+  messages — over generic examples.
+
+HARD RULES
+- Never invent facts, numbers, or receipts. A vague claim with no receipt gets flagged
+  [NEEDS RECEIPT: …], never decorated.
+- Never flatten voice: a sentence that is weird in a human way stays.
+- Cuts beat rewrites. Target 10-25% shorter; if you cut less than 5%, say why.
+
+OUTPUT
+1. The edited draft, complete.
+2. Under "— edits —": a 3-6 line summary of what died and any [NEEDS RECEIPT] flags.""",
+        tools=["current_time"],
+        max_turns=6,
+    )
+
+    return [writer, editor, researcher, deslop]
+
+
+# Config key per crew member (flat string keys — the settings UI renders strings,
+# not maps). Kept as config, never compiled in: model names are deployment facts,
+# and this plugin hard-codes nothing that drifts (the platform-norms rule, applied
+# to models).
+_MODEL_KEYS = {
+    "social_writer": "writer_model",
+    "social_editor": "editor_model",
+    "social_researcher": "researcher_model",
+    "deslop_editor": "deslop_model",
+}
 
 
 def register_subagents(registry) -> None:
+    cfg_section = registry.config if isinstance(getattr(registry, "config", None), dict) else {}
     for cfg in _configs():
+        override = str(cfg_section.get(_MODEL_KEYS.get(cfg.name, "")) or "").strip()
+        if override:
+            cfg.model = override
         registry.register_subagent(cfg)
