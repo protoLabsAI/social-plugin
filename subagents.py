@@ -200,7 +200,10 @@ HARD RULES
 OUTPUT
 1. The edited draft, complete.
 2. Under "— edits —": a 3-6 line summary of what died and any [NEEDS RECEIPT] flags.""",
-        tools=["current_time"],
+        # Deliberately TOOLLESS: the pass is pure text-in/text-out, and creative-tuned
+        # lanes often run backends without function calling — a tools-bearing request
+        # against one is a hard 400 (hit live: Daria's supports_function_calling: false).
+        tools=[],
         max_turns=6,
     )
 
