@@ -54,7 +54,7 @@ Export what I've approved.        → a copy-ready pack
 
 | Key | Default | What it's for |
 |---|---|---|
-| `data_dir` | `~/.protoagent/social` (per instance) | Brand kit, queue database, exports. Point it at a synced or version-controlled folder if you want the kit in git. |
+| `data_dir` | Instance-scoped plugin store | Brand kit, queue database, exports. Point it at a synced or version-controlled folder if you want the kit in git. |
 | `brand_kit_path` | `<data_dir>/brand-kit.yaml` | Override the kit's path alone — useful when the kit lives in a repo but the queue stays local. |
 | `active_platforms` | `x, linkedin, instagram, bluesky` | The surfaces this brand actually posts to. Specs for the rest stay available on request. |
 
