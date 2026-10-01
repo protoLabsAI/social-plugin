@@ -18,6 +18,7 @@ Two uses:
 from __future__ import annotations
 
 import os
+import re
 from pathlib import Path
 from typing import Any
 
@@ -151,6 +152,168 @@ def validate(data: dict[str, Any]) -> list[str]:
     platforms = data.get("platforms")
     if platforms is not None and not isinstance(platforms, dict):
         out.append("error: `platforms` must be a mapping of platform id -> overrides")
+
+    out.extend(validate_visual(data))
+    return out
+
+
+# ── the visual identity (optional) ────────────────────────────────────────────
+# A CONTRACT, not just a section: sibling plugins (campaign-plugin) read `visual:`
+# straight out of this YAML file to style generated cards. Keep the shape flat and
+# stable — every leaf is a scalar string — and only ever ADD optional keys:
+#
+#   visual:
+#     colors:   {primary, accent, background, foreground}   # "#RRGGBB" (or "#RGB"), QUOTED
+#     fonts:    {heading, body, heading_url, body_url}       # family names; *_url = stylesheet/font URL
+#     logo:     {path, dark, light}                          # relative to the kit file, or absolute
+#     wordmark: "Testco"                                     # the name as set in type
+#
+# `logo.dark` is the variant for DARK backgrounds, `logo.light` for LIGHT ones. Every
+# problem in here is a warning, never an error: a kit with an absent or half-filled
+# visual section is a normal kit, and a bad colour must never stop a voice edit saving.
+VISUAL_COLORS = ("primary", "accent", "background", "foreground")
+VISUAL_FONTS = ("heading", "body", "heading_url", "body_url")
+VISUAL_LOGOS = ("path", "dark", "light")
+VISUAL_KEYS = ("colors", "fonts", "logo", "wordmark")
+
+_HEX = re.compile(r"^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$")
+
+
+def is_hex_color(value: Any) -> bool:
+    return isinstance(value, str) and bool(_HEX.match(value.strip()))
+
+
+def is_font_url(value: Any) -> bool:
+    return isinstance(value, str) and value.strip().lower().startswith(("http://", "https://"))
+
+
+def _resolve_asset(value: str, base: Path) -> Path:
+    p = Path(value).expanduser()
+    return p if p.is_absolute() else base / p
+
+
+def validate_visual(data: dict[str, Any] | None, base: Path | None = None) -> list[str]:
+    """Warnings for the optional `visual:` section. Absent section = no output.
+
+    ``base`` is the directory relative logo paths resolve against — the kit file's
+    own directory by default.
+    """
+    raw = (data or {}).get("visual")
+    if raw is None:
+        return []
+    if not isinstance(raw, dict):
+        return ["warn: `visual` must be a mapping (colors / fonts / logo / wordmark) — ignoring it"]
+    base = path().parent if base is None else base
+    out: list[str] = []
+
+    for key in raw:
+        if key not in VISUAL_KEYS:
+            out.append(f"warn: `visual.{key}` is not part of the visual contract ({', '.join(VISUAL_KEYS)}) — ignored")
+
+    colors = raw.get("colors")
+    if colors is not None and not isinstance(colors, dict):
+        out.append("warn: `visual.colors` must be a mapping of role -> hex — ignoring it")
+    elif isinstance(colors, dict):
+        for key, value in colors.items():
+            if key not in VISUAL_COLORS:
+                out.append(f"warn: `visual.colors.{key}` is not a contract role ({', '.join(VISUAL_COLORS)}) — ignored")
+            elif value is None:
+                # `primary: #1F6FEB` parses as null — the # opened a comment.
+                out.append(
+                    f"warn: `visual.colors.{key}` is empty — quote hex values in YAML "
+                    f'(`{key}: "#1F6FEB"`); an unquoted # starts a comment'
+                )
+            elif str(value).strip() == "":
+                continue  # the blank template slot
+            elif not is_hex_color(value):
+                out.append(f'warn: `visual.colors.{key}` must be a hex colour like "#1F6FEB" (got {value!r}) — ignored')
+
+    fonts = raw.get("fonts")
+    if fonts is not None and not isinstance(fonts, dict):
+        out.append("warn: `visual.fonts` must be a mapping (heading / body / heading_url / body_url) — ignoring it")
+    elif isinstance(fonts, dict):
+        for key, value in fonts.items():
+            if key not in VISUAL_FONTS:
+                out.append(f"warn: `visual.fonts.{key}` is not a contract key ({', '.join(VISUAL_FONTS)}) — ignored")
+            elif value is not None and not isinstance(value, str):
+                out.append(f"warn: `visual.fonts.{key}` must be a string — ignored")
+            elif key.endswith("_url") and value and not is_font_url(value):
+                out.append(f"warn: `visual.fonts.{key}` must be an http(s) URL (got {value!r}) — ignored")
+
+    logo = raw.get("logo")
+    if isinstance(logo, str):
+        out.append("warn: `visual.logo` is a bare path; write it as `logo: {path: ...}` — readers expect the mapping")
+        logo = {"path": logo}
+    if logo is not None and not isinstance(logo, dict):
+        out.append("warn: `visual.logo` must be a mapping (path / dark / light) — ignoring it")
+    elif isinstance(logo, dict):
+        for key, value in logo.items():
+            if key not in VISUAL_LOGOS:
+                out.append(f"warn: `visual.logo.{key}` is not a contract key ({', '.join(VISUAL_LOGOS)}) — ignored")
+            elif value is None or str(value).strip() == "":
+                continue
+            elif not isinstance(value, str):
+                out.append(f"warn: `visual.logo.{key}` must be a file path — ignored")
+            elif not _resolve_asset(value, base).is_file():
+                out.append(f"warn: `visual.logo.{key}` file not found at {_resolve_asset(value, base)}")
+
+    wordmark = raw.get("wordmark")
+    if wordmark is not None and not isinstance(wordmark, str):
+        out.append("warn: `visual.wordmark` must be a string — ignored")
+
+    return out
+
+
+def visual(data: dict[str, Any] | None, base: Path | None = None) -> dict[str, Any]:
+    """The usable part of `visual:`, normalized: only valid, non-empty values survive.
+
+    Logo paths come back ABSOLUTE (resolved against the kit's directory) with an
+    ``exists`` map, so a consumer never has to know where the kit lives. Returns ``{}``
+    when the kit has no visual identity.
+    """
+    raw = (data or {}).get("visual")
+    if not isinstance(raw, dict):
+        return {}
+    base = path().parent if base is None else base
+    out: dict[str, Any] = {}
+
+    colors = raw.get("colors")
+    if isinstance(colors, dict):
+        good = {k: str(colors[k]).strip() for k in VISUAL_COLORS if is_hex_color(colors.get(k))}
+        if good:
+            out["colors"] = good
+
+    fonts = raw.get("fonts")
+    if isinstance(fonts, dict):
+        good = {}
+        for k in VISUAL_FONTS:
+            v = fonts.get(k)
+            if not isinstance(v, str) or not v.strip():
+                continue
+            if k.endswith("_url") and not is_font_url(v):
+                continue
+            good[k] = v.strip()
+        if good:
+            out["fonts"] = good
+
+    logo = raw.get("logo")
+    if isinstance(logo, str):
+        logo = {"path": logo}
+    if isinstance(logo, dict):
+        good = {}
+        exists_ = {}
+        for k in VISUAL_LOGOS:
+            v = logo.get(k)
+            if isinstance(v, str) and v.strip():
+                resolved = _resolve_asset(v.strip(), base)
+                good[k] = str(resolved)
+                exists_[k] = resolved.is_file()
+        if good:
+            out["logo"] = {**good, "exists": exists_}
+
+    wordmark = raw.get("wordmark")
+    if isinstance(wordmark, str) and wordmark.strip():
+        out["wordmark"] = wordmark.strip()
 
     return out
 
@@ -373,9 +536,49 @@ def brief(data: dict[str, Any] | None = None, section: str = "") -> str:
     if isinstance(cadence, dict) and cadence:
         blocks["cadence"] = "## Cadence\n" + "\n".join(f"- {k}: {v}" for k, v in cadence.items())
 
+    vis = visual(data)
+    if vis or data.get("visual") is not None:
+        rows = ["## Visual identity"]
+        for k, v in vis.get("colors", {}).items():
+            rows.append(f"- Colour {k}: {v}")
+        fonts = vis.get("fonts", {})
+        for k in ("heading", "body"):
+            if fonts.get(k):
+                rows.append(
+                    f"- {k.capitalize()} font: {fonts[k]}"
+                    + (f" ({fonts[k + '_url']})" if fonts.get(k + "_url") else "")
+                )
+        logo = vis.get("logo", {})
+        for k, label in (
+            ("path", "Logo"),
+            ("dark", "Logo on dark backgrounds"),
+            ("light", "Logo on light backgrounds"),
+        ):
+            if logo.get(k):
+                rows.append(f"- {label}: {logo[k]}" + ("" if logo["exists"].get(k) else " (FILE MISSING)"))
+        if vis.get("wordmark"):
+            rows.append(f"- Wordmark: {vis['wordmark']}")
+        problems = validate_visual(data)
+        if problems:
+            rows.append("- Problems:")
+            rows.extend(f"    - {p[5:].strip()}" for p in problems)
+        if len(rows) == 1:
+            rows.append("- (empty)")
+        blocks["visual"] = "\n".join(rows)
+
     if section:
         # Accept a few natural aliases for the block names.
-        alias = {"audience": "audiences", "pillar": "pillars", "cta": "ctas", "offer": "offers"}
+        alias = {
+            "audience": "audiences",
+            "pillar": "pillars",
+            "cta": "ctas",
+            "offer": "offers",
+            "visuals": "visual",
+            "colors": "visual",
+            "colours": "visual",
+            "fonts": "visual",
+            "logo": "visual",
+        }
         key = alias.get(section, section)
         if key in blocks:
             return blocks[key]
@@ -447,4 +650,23 @@ handles: {}               # e.g. {x: "@you", linkedin: "your-company"}
 platforms: {}
 
 cadence: {}               # e.g. {x: "5/week", linkedin: "3/week"}
+
+# Optional: the look. Other plugins (e.g. campaign cards) style output from this.
+# QUOTE hex colours — an unquoted # starts a YAML comment.
+visual:
+  colors:
+    primary: ""           # e.g. "#1F6FEB"
+    accent: ""
+    background: ""
+    foreground: ""
+  fonts:
+    heading: ""           # a family name, e.g. Space Grotesk
+    body: ""
+    heading_url: ""       # optional: a Google Fonts css2 link or font URL
+    body_url: ""
+  logo:
+    path: ""              # relative to this file, or absolute
+    dark: ""              # variant for dark backgrounds
+    light: ""             # variant for light backgrounds
+  wordmark: ""
 """

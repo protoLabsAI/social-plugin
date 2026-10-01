@@ -33,7 +33,8 @@ def build_tools(registry):
         """Read the brand kit — who we talk to, the content pillars, the voice, the banned
         words, the proof points, and the CTAs. Call this BEFORE drafting anything; without it
         every post sounds like generic marketing. Pass a section (voice, audiences, pillars,
-        offers, ctas, platforms, cadence) to read just that part."""
+        offers, ctas, platforms, cadence, visual) to read just that part — `visual` is the
+        brand's colours, fonts, logo files, and wordmark, with any problems in them listed."""
         try:
             return brandkit.brief(section=section)
         except Exception as e:  # noqa: BLE001 — a malformed kit should say so, not crash the turn

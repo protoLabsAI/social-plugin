@@ -56,9 +56,19 @@ def build_data_router():
     @router.get("/brand-kit")
     async def _brand_kit() -> JSONResponse:
         try:
-            return JSONResponse({"exists": brandkit.exists(), "kit": brandkit.load() or {}})
+            kit = brandkit.load() or {}
+            return JSONResponse(
+                {
+                    "exists": brandkit.exists(),
+                    "kit": kit,
+                    "visual": brandkit.visual(kit),
+                    "visual_warnings": [w[5:].strip() for w in brandkit.validate_visual(kit)],
+                }
+            )
         except Exception as e:  # noqa: BLE001 — report the parse error to the panel
-            return JSONResponse({"exists": brandkit.exists(), "kit": {}, "error": str(e)})
+            return JSONResponse(
+                {"exists": brandkit.exists(), "kit": {}, "visual": {}, "visual_warnings": [], "error": str(e)}
+            )
 
     return router
 
