@@ -99,6 +99,49 @@ Two things in here do real work beyond flavour:
   costs more than one that posts nothing.
 - **`banned`** is enforced mechanically, not suggested. A draft containing one is `blocked`.
 
+### Visual identity (`visual:`) — a contract
+
+An optional section for how the brand *looks*. The agent asks for it during the
+`brand-kit-setup` interview, `social_brand_kit(section="visual")` reads it back (with any
+problems listed), and `GET /api/plugins/social/brand-kit` returns it normalized under
+`visual` alongside `visual_warnings`.
+
+```yaml
+visual:
+  colors:                       # hex, "#RRGGBB" or "#RGB" — QUOTE them (an unquoted # is a YAML comment)
+    primary:    "#1F6FEB"
+    accent:     "#F78166"
+    background: "#0D1117"
+    foreground: "#E6EDF3"
+  fonts:
+    heading: Space Grotesk      # family names
+    body: Inter
+    heading_url: https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700   # optional
+    body_url: https://fonts.googleapis.com/css2?family=Inter:wght@400;600              # optional
+  logo:                         # relative to the brand-kit file, or absolute
+    path: assets/logo.svg       # the default mark
+    dark: assets/logo-on-dark.svg    # optional: the variant for DARK backgrounds
+    light: assets/logo-on-light.svg  # optional: the variant for LIGHT backgrounds
+  wordmark: Testco              # optional: the name as set in type
+```
+
+**Other plugins read this section straight out of the YAML file** (campaign-plugin styles
+its generated cards from it), so the shape is a stable contract:
+
+- Every key is optional, and the whole section may be absent. Readers fall back to their own
+  defaults for anything missing.
+- Every leaf is a plain string. `colors` has exactly the four roles above; `fonts` has
+  `heading`, `body`, `heading_url`, `body_url`; `logo` has `path`, `dark`, `light`.
+- Colours are `#` + 3 or 6 hex digits. Font URLs are `http(s)`. Relative logo paths resolve
+  against the **directory of the brand-kit file**, not the working directory.
+- `logo.dark` = for use on dark backgrounds; `logo.light` = for use on light backgrounds.
+- Future versions only *add* optional keys; existing keys keep their meaning.
+
+Validation never blocks a save over visuals: a bad hex, an unknown key, a non-URL font link,
+or a logo path that doesn't exist each produce a **warning** naming the problem, and the
+invalid value is dropped from the normalized view. A reader that parses the raw YAML should
+apply the same rules (ignore what doesn't validate) rather than trusting it.
+
 ## Platform norms
 
 Hard limits are compiled in — X caps at 280 characters, YouTube titles at 100 — because the

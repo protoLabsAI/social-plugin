@@ -251,3 +251,18 @@ def test_the_blocked_hint_names_the_read_call_too(tools):
     row = store.add(platform="x", body="a" * 400)
     out = call(tools, "social_check", post_id=row["id"])
     assert f"social_queue_list(post_id={row['id']})" in out
+
+
+def test_brand_kit_tool_reads_the_visual_section(tools):
+    from social import brandkit
+
+    brandkit.save({"brand": "X", "visual": {"colors": {"primary": "#1F6FEB"}, "logo": {"path": "nope.svg"}}})
+    out = call(tools, "social_brand_kit", section="visual")
+    assert "Colour primary: #1F6FEB" in out
+    assert "nope.svg (FILE MISSING)" in out
+
+
+def test_save_brand_kit_surfaces_visual_warnings_without_refusing(tools):
+    out = call(tools, "social_save_brand_kit", yaml_text='brand: X\nvisual:\n  colors:\n    primary: "orange"\n')
+    assert out.startswith("Saved the brand kit")
+    assert "visual.colors.primary" in out

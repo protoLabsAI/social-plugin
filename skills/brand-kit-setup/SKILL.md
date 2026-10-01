@@ -76,13 +76,29 @@ positioning and should not survive into the file.
 - Any house rules that override the shipped norms (e.g. "we never do the first-comment link
   trick") go in `platforms:`.
 
+**8. What does it look like?** (optional — the `visual:` section)
+- Ask once; skip cleanly if they have no brand assets yet. Other plugins (campaign cards,
+  generated graphics) style their output from this, so real values beat guesses.
+- **Colours** — four roles: `primary`, `accent`, `background`, `foreground`, each a hex value
+  like `"#1F6FEB"`. Ask for the hex codes from their style guide or site CSS; don't eyeball a
+  colour from a description. Quote every hex in the YAML — an unquoted `#` is a comment.
+- **Fonts** — the `heading` and `body` family names (e.g. Space Grotesk / Inter). If it's a
+  Google Font or a hosted file, put the stylesheet link in `heading_url` / `body_url`.
+- **Logo** — a file path, relative to the brand-kit file or absolute. Ask whether they have
+  separate versions for dark and light backgrounds: `dark` is the one used ON dark
+  backgrounds, `light` the one used on light. Confirm the files exist — the save will warn
+  if a path doesn't resolve.
+- **Wordmark** — the name exactly as it's set in type, if that differs from `brand`
+  (casing, spacing, a symbol).
+
 ## Writing the file
 
 Compose the whole YAML document and save it with `social_save_brand_kit(yaml_text)`. Send the
 complete document — the save replaces the file.
 
 Then read back the parts that will surprise them: the banned list, the pillar mix, and the
-proof points. Say explicitly: "I'll only use numbers from this list — if I need one that isn't
+proof points. If you saved a `visual:` section, read it back with
+`social_brand_kit(section="visual")` and fix any colour or logo problem it lists. Say explicitly: "I'll only use numbers from this list — if I need one that isn't
 here, I'll ask."
 
 If the tool reports gaps, tell the operator which ones matter now and which can wait. An
