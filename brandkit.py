@@ -183,6 +183,10 @@ def is_hex_color(value: Any) -> bool:
     return isinstance(value, str) and bool(_HEX.match(value.strip()))
 
 
+def is_font_url(value: Any) -> bool:
+    return isinstance(value, str) and value.strip().lower().startswith(("http://", "https://"))
+
+
 def _resolve_asset(value: str, base: Path) -> Path:
     p = Path(value).expanduser()
     return p if p.is_absolute() else base / p
@@ -233,7 +237,7 @@ def validate_visual(data: dict[str, Any] | None, base: Path | None = None) -> li
                 out.append(f"warn: `visual.fonts.{key}` is not a contract key ({', '.join(VISUAL_FONTS)}) — ignored")
             elif value is not None and not isinstance(value, str):
                 out.append(f"warn: `visual.fonts.{key}` must be a string — ignored")
-            elif key.endswith("_url") and value and not value.strip().lower().startswith(("http://", "https://")):
+            elif key.endswith("_url") and value and not is_font_url(value):
                 out.append(f"warn: `visual.fonts.{key}` must be an http(s) URL (got {value!r}) — ignored")
 
     logo = raw.get("logo")
@@ -286,7 +290,7 @@ def visual(data: dict[str, Any] | None, base: Path | None = None) -> dict[str, A
             v = fonts.get(k)
             if not isinstance(v, str) or not v.strip():
                 continue
-            if k.endswith("_url") and not v.strip().lower().startswith(("http://", "https://")):
+            if k.endswith("_url") and not is_font_url(v):
                 continue
             good[k] = v.strip()
         if good:

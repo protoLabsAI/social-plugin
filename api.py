@@ -66,7 +66,7 @@ def build_data_router():
                 }
             )
         except Exception as e:  # noqa: BLE001 — report the parse error to the panel
-            return JSONResponse({"exists": brandkit.exists(), "kit": {}, "visual": {}, "error": str(e)})
+            return JSONResponse({"exists": brandkit.exists(), "kit": {}, "visual": {}, "visual_warnings": [], "error": str(e)})
 
     return router
 

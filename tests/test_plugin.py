@@ -161,6 +161,7 @@ def test_brand_kit_route_reports_a_broken_kit_instead_of_500ing(client):
     body = client.get("/api/plugins/social/brand-kit").json()
     assert body["exists"] is True
     assert "error" in body
+    assert body["visual"] == {} and body["visual_warnings"] == [], "same keys on the error path"
 
 
 def test_brand_kit_route_returns_the_normalized_visual_section(client):
