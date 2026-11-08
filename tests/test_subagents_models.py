@@ -53,3 +53,12 @@ def test_every_model_key_is_a_declared_config_key(monkeypatch):
 
     for key in subagents._MODEL_KEYS.values():
         assert key in MANIFEST["config"], key
+
+
+def test_no_subagent_names_a_removed_memory_tool():
+    """protoAgent 0.231.0 removed memory_recall/memory_ingest/forget_memory/memory_stats (ADR 0125)."""
+    import re
+    from pathlib import Path
+
+    src = (Path(__file__).resolve().parent.parent / "subagents.py").read_text()
+    assert not re.search(r"\b(memory_recall|memory_ingest|forget_memory|memory_stats)\b", src)

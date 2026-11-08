@@ -15,7 +15,7 @@ description: >-
 repository: "https://github.com/protoLabsAI/social-plugin"
 guide_url: "https://github.com/protoLabsAI/social-plugin#quick-start"
 # The DS plugin-kit (/_ds/) + the sandboxed-iframe view convention need a recent host.
-min_protoagent_version: "0.148.0"  # sdk.plugin_store
+min_protoagent_version: "0.231.0"  # memory_search (ADR 0125 renamed the memory tools); sdk.plugin_store since 0.148
 
 # Declarative posture (ADR 0071). This plugin has NO network surface of its own: it holds no
 # platform credentials and makes no outbound calls. Research during drafting runs through the
