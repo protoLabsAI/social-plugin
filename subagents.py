@@ -52,7 +52,7 @@ fact, say which one — a flagged assumption is fine, a fabricated statistic is 
             "current_time",
             "web_search",
             "fetch_url",
-            "memory_recall",
+            "memory_search",
             "social_brand_kit",
             "social_platform_spec",
             "social_check",
