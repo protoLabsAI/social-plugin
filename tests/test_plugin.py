@@ -130,6 +130,17 @@ def client(registry):
     return TestClient(app)
 
 
+def test_every_route_appears_in_the_openapi_schema(client):
+    # A route whose return annotation can't resolve (a class imported inside the
+    # builder, under `from __future__ import annotations`) breaks the schema build:
+    # the host drops it from /openapi.json with a PydanticUserError warning.
+    schema = client.app.openapi()
+    paths = set(schema["paths"])
+    for path in ("/plugins/social/view", "/api/plugins/social/queue", "/api/plugins/social/brand-kit"):
+        assert path in paths, f"{path} is missing from /openapi.json"
+    assert client.get("/openapi.json").status_code == 200
+
+
 def test_the_declared_view_path_is_the_path_actually_served(client):
     declared = MANIFEST["views"][0]["path"]
     assert declared == "/plugins/social/view"
